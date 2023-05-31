@@ -164,9 +164,9 @@ TEST(stack_buildup_works) {
 
   // Deletion
   Inst inst_arr2[] = {
-    { .code=POP, .mem={ .seg=LOC, .offset=0 }},
-    { .code=POP, .mem={ .seg=LOC, .offset=1 }},
-    { .code=POP, .mem={ .seg=LOC, .offset=2 }},
+    { .code=POP, .mem={ .seg=CONST, .offset=0 }},
+    { .code=POP, .mem={ .seg=CONST, .offset=0 }},
+    { .code=POP, .mem={ .seg=CONST, .offset=0 }},
     { .code=ADD },
   };
   Insts* insts2 =  setup_insts(inst_arr2, 4);
@@ -185,16 +185,19 @@ TEST(stack_buildup_works) {
 TEST(segment_addressing_works) {
   Inst set_arr[] = {
     { .code=PUSH, .mem={ .seg=CONST, .offset=2207}},
-    { .code=POP, .mem={ .seg=ARG, .offset=0 }},
+    { .code=POP, .mem={ .seg=STAT, .offset=0 }},
   };
   Inst check_arr[] = {
-    { .code=PUSH, .mem={ .seg=ARG, .offset=0 }},
+    { .code=PUSH, .mem={ .seg=STAT, .offset=0 }},
   };
 
   Insts* set_insts = setup_insts(set_arr, 2);
   Insts* check_insts = setup_insts(check_arr, 1);
 
-  for (int seg = ARG; seg <= TMP; seg++) {
+  // NOTE: `local` and `argument` aren't included in this
+  // test since they are only available to functions.
+
+  for (int seg = STAT; seg <= TMP; seg++) {
     if (seg == CONST)  // Skip pseudo segment.
       continue;
     Stack s = new_stack();
@@ -315,53 +318,6 @@ TEST(stack_doesnt_change_on_error) {
   return MUNIT_OK;
 }
 
-TEST(can_multiply_two_numbers) {
-  // `floor(sqrt(65535))` is 255 so if neither operand
-  // ever exceeds 255, then the result will never overflow.
-  uint16_t a = munit_rand_int_range(0, 255);
-  uint16_t b = munit_rand_int_range(0, 255);
-  Inst inst_arr[] = {
-    // Initialize the counter.
-    { .code=PUSH, .mem={ .seg=CONST, .offset=a }},
-    { .code = POP, .mem={ .seg=LOC, .offset=2 }},
-    // Add `b` to the accumulator in `local 1`.
-    { .code=PUSH, .mem={ .seg=LOC, .offset=1 }},
-    { .code=PUSH, .mem={ .seg=CONST, .offset=b }},
-    { .code=ADD },
-    { .code=POP, .mem={ .seg=LOC, .offset=1 }},
-    // Decrease the counter in `local 2`
-    { .code=PUSH, .mem={ .seg=LOC, .offset=2 }},
-    { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
-    { .code=SUB },
-    { .code=POP, .mem={ .seg=LOC, .offset=2 }},
-    // Jump if the counter is 0.
-    { .code=PUSH, .mem={ .seg=LOC, .offset=2 }},
-    { .code=PUSH, .mem={ .seg=CONST, .offset=0 }},
-    { .code=EQ },
-    { .code=IF_GOTO, .ident="end" },
-    // Repeat the loop
-    { .code=GOTO, .ident="mult_loop_start" },
-    // Push the result
-    { .code=PUSH, .mem={ .seg=LOC, .offset=1 }},
-  };
-  SymbolTable st = new_st();
-  assert_int(insert_st(&st, mk_key("mult_loop_start", SBT_LABEL), mk_lbval(2)), ==, INRES_OK);
-  assert_int(insert_st(&st, mk_key("end", SBT_LABEL), mk_lbval(15)), ==, INRES_OK);
-
-  Insts* insts = setup_insts(inst_arr, 16);
-  Stack s = new_stack();
-  Heap h = new_heap();
-  assert_int(exec(&s, &h, &st, insts), ==, 0);
-  assert_int(s.ops[s.sp - 1], ==, a * b);
-
-  del_st(st);
-  cleanup_insts(insts);
-  del_stack(s);
-  del_heap(h);
-
-  return MUNIT_OK;
-}
-
 MunitTest exec_tests[] = {
   REG_TEST(correct_stack_errors),
   REG_TEST(correct_memory_errors),
@@ -370,7 +326,6 @@ MunitTest exec_tests[] = {
   REG_TEST(stack_doesnt_change_on_error),
   REG_TEST(stack_buildup_works),
   REG_TEST(segment_addressing_works),
-  REG_TEST(can_multiply_two_numbers),
   { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 

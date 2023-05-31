@@ -10,9 +10,10 @@ their assembly.
 ```sh
 git clone https://github.com/d4ckard/hvme.git
 cd hvme
-make run args=examples/fibonnaci.vm
-# Computes the 16'th element in the fibonacci sequence (987).
+make run args=examples/fibonacci.vm
 ```
+
+This computes the 16th element in the Fibonacci sequence (987).
 
 ## To Do
 
