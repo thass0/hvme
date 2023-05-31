@@ -1,0 +1,27 @@
+function mult 3
+	push argument 0
+	pop local 2
+label mult
+	push local 1
+	push argument 1
+	add
+	pop local 1
+
+	push local 2
+	push constant 1
+	sub
+	pop local 2
+	push local 2
+	push constant 0
+	eq
+if-goto end
+goto mult
+label end
+	push local 1
+
+	return
+
+function Sys.init 0
+	push constant 4
+	push constant 8
+	call mult 2
