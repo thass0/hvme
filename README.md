@@ -19,13 +19,18 @@ This computes the 16th element in the Fibonacci sequence (987).
 
 - [ ] Add error context to execution.
 
-- [ ] Remove previous return values from REPL
-      so that the instructions become more readable.
-
-- [ ] Improve identifier messaging.
-
-- [ ] Logically group different `Insts` and `SymbolTable` instances.
+- [x] Improve identifier messaging.
 
 - [ ] Combine multiple files and manage their static data.
 
+      - [ ] Logically group different `Insts` and `SymbolTable` instances.
+
+      - [ ] Find a strategy to execute code while jumping between files.
+
+
 - [x] Add function, call and return (finishes up language spec)
+
+### REPL (abandoned)
+
+- [ ] Remove previous return values from REPL
+      so that the instructions become more readable.

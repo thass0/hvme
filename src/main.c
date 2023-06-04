@@ -3,7 +3,7 @@
 
 #include "utils.h"
 #include "scan.h"
-#include "repl.h"
+// #include "repl.h"
 #include "parse.h"
 #include "exec.h"
 #include "st.h"
@@ -11,7 +11,9 @@
 int main(int argc, const char* argv[]) {
   const char* filename = parse_args(argc, argv);
   if (filename == NULL) {
-    return repl();
+    // return repl();
+    err("Can't execute 0 files!");
+    return 1;
   } else {
     warn_file_ext(filename);
 

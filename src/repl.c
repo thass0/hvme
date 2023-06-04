@@ -5,7 +5,8 @@
 #include "exec.h"
 #include "st.h"
 
-#include <editline/readline.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <setjmp.h>

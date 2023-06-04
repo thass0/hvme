@@ -1,11 +1,11 @@
 CC = clang
 CFLAGS = -g -fsanitize=address -Werror -Wall -Wextra -pedantic-errors -std=gnu11
-LDFLAGS = -ledit -lm
+LDFLAGS =  -lreadline -lm
 CPPFLAGS =
 
 BUILD_DIR = build
 SOURCE_DIR = src
-SOURCES = $(wildcard $(SOURCE_DIR)/*.c)
+SOURCES = $(filter-out $(wildcard $(SOURCE_DIR)/repl.*), $(wildcard $(SOURCE_DIR)/*.c))
 OBJECTS = $(patsubst $(SOURCE_DIR)/%.c, $(BUILD_DIR)/%.o, $(SOURCES))
 BINARY = $(BUILD_DIR)/vme
 
@@ -27,7 +27,7 @@ run: all
 
 test: CPPFLAGS = -D UNIT_TESTS
 test: $(TEST_BINARY)
-	./$(TEST_BINARY)
+	./$(TEST_BINARY) $(args)
 
 
 $(TEST_BINARY): $(TEST_OBJECTS)
