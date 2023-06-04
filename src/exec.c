@@ -1,24 +1,15 @@
 #include "exec.h"
+#include "prog.h"
+#include "st.h"
 #include "utils.h"
 #include "parse.h"
 
 #include <stdlib.h>
 #include <assert.h>
 #include <setjmp.h>
+#include <string.h>
 
-#define MEM_SIZE 0xFFFF
-
-// Extended word to allow buffering
-// and checking if overflows occured
-// on itermediate results.
-typedef uint32_t Wordbuf;
-
-// `temp` and `static` segments
-# define STAT_SIZE 0xFFul
-static Word static_seg[STAT_SIZE];
-
-# define TMP_SIZE 0xFul
-static  Word temp_seg[TMP_SIZE];
+#define BIT16_LIMIT 65535
 
 // Execution error return location.
 static jmp_buf exec_env;
@@ -27,12 +18,10 @@ static jmp_buf exec_env;
 // they are defined here to avoid different spelling
 // of the same error or something similar).
 
-#define MISSING_ST_ERROR(inst) { \
-    INST_STR(str, inst); \
-    errf("missing symbol table: can't execute control flow instruction `%s`", str); \
-    longjmp(exec_env, EXEC_ERR); \
+#define STACK_UNDERFLOW_ERROR {\
+  err("stack underflow"); \
+  longjmp(exec_env, EXEC_ERR); \
 }
-#define STACK_UNDERFLOW_ERROR err("stack underflow"); longjmp(exec_env, EXEC_ERR)
 #define POINTER_SEGMENT_ERROR(addr) \
   errf("can't access pointer segment at `%lu` (max. index is 1).", (addr)); \
   longjmp(exec_env, EXEC_ERR)
@@ -41,13 +30,13 @@ static jmp_buf exec_env;
   errf("address overflow: `%s` tries to access RAM at %lu.", inst_str_buf, (addr)); \
   longjmp(exec_env, EXEC_ERR); \
 }
-# define STACK_ADDR_OVERFLOW_ERROR(inst, addr, max_addr) { \
+#define STACK_ADDR_OVERFLOW_ERROR(inst, addr, max_addr) { \
   INST_STR(inst_str_buf, inst); \
   errf("stack address overflow: `%s` tries to access stack at %lu (limit is at %lu)", \
     inst_str_buf, (addr), (max_addr)); \
   longjmp(exec_env, EXEC_ERR); \
 }
-# define SEG_OVERFLOW_ERROR(inst, offset) { \
+#define SEG_OVERFLOW_ERROR(inst, offset) { \
   INST_STR(inst_str_buf, inst); \
   errf("address overflow in `%s`: segment has %lu entries", \
     inst_str_buf, offset); \
@@ -62,97 +51,23 @@ static jmp_buf exec_env;
   longjmp(exec_env, EXEC_ERR); \
 }
 #define CTRL_FLOW_ERROR(ident) { \
-  errf("can't jump to %s", ident); \
+  if (strcmp(ident, "Sys.init") == 0) { \
+    err("can't jump to function `Sys.init`.\n" SOLUTION_ARROW "Write it"); \
+  } else { \
+    errf("can't jump to %s", ident); \
+  } \
   longjmp(exec_env, EXEC_ERR); \
 }
-# define NARGS_ERROR(nargs, sp) { \
+#define NARGS_ERROR(nargs, sp) { \
   errf("given number of stack arguments (%d) is wrong." \
     " There are only %lu elements on the stack!", \
     (nargs), (sp)); \
   longjmp(exec_env, EXEC_ERR); \
 }
 
-Stack new_stack(void) {
-  Stack s = {
-    .sp=0,
-    .len=STACK_BLOCK_SIZE,
-    .arg=0,
-    .arg_len=0,
-    .lcl=0,
-    .lcl_len=0,
-  };
-  s.ops = (Word*) calloc (s.len, sizeof(Word));
-  assert(s.ops != NULL);
-  return s;
-}
-
-void del_stack(Stack s) {
-  free(s.ops);
-}
-
-static inline void spush(Stack* stack, Word val) {
+void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
   assert(stack != NULL);
-  
-  if (stack->sp == stack->len) {
-    stack->len += STACK_BLOCK_SIZE;
-    stack->ops = (Word*) realloc (stack->ops, stack->len * sizeof(Word));
-    assert(stack->ops != NULL);
-  }
-
-  stack->ops[stack->sp] = val;
-  stack->sp ++;
-}
-
-static inline Word spop(Stack* stack) {
-  assert(stack != NULL);
-
-  if (stack->sp > 0) {
-    stack->sp --;
-    if (stack->sp < stack->len - STACK_BLOCK_SIZE) {
-      stack->len -= STACK_BLOCK_SIZE;
-      stack->ops = (Word*) realloc (stack->ops, stack->len * sizeof(Word));
-      assert(stack->ops != NULL);
-    }
-    return stack->ops[stack->sp];
-  } else {
-    STACK_UNDERFLOW_ERROR;
-  }
-}
-
-Heap new_heap(void) {
-  Heap h = {
-    ._this = 0,
-    .that = 0,
-  };
-  h.mem = (Word*) calloc (MEM_SIZE, sizeof(Word));
-  assert(h.mem != NULL);
-  return h;
-}
-
-void del_heap(Heap h) {
-  free(h.mem);
-}
-
-static inline Word heap_get(const Heap h, Addr addr) {
-  assert(h.mem != NULL);
-  // No need to check out of range errors
-  // since `heap.mem` has 0xFFFF entries
-  // and `Addr` can't be larger than that.
-  // Rare case of C type-safety ...
-  return h.mem[addr];
-}
-
-static inline void heap_set(Heap h, Addr addr, Word val) {
-  assert(h.mem != NULL);
-  // See `heap_get` about further range checks.
-  h.mem[addr] = val;
-}
-
-void exec_pop(Stack* stack, Heap* heap, Inst inst) {
-  assert(stack != NULL);
-  assert(stack->ops != NULL);
-  assert(heap != NULL);
-  assert(heap->mem != NULL);
+  assert(mem != NULL);
 
   size_t offset = inst.mem.offset;
 
@@ -165,7 +80,8 @@ void exec_pop(Stack* stack, Heap* heap, Inst inst) {
         // (same with loc).
         offset + stack->arg < stack->sp
       ) {
-        stack->ops[offset + stack->arg] = spop(stack);
+        if (!spop(stack, &stack->ops[offset + stack->arg]))
+          STACK_UNDERFLOW_ERROR;
       } else {
         if (offset >= stack->arg_len) {
           SEG_OVERFLOW_ERROR(&inst, stack->arg_len);
@@ -179,7 +95,8 @@ void exec_pop(Stack* stack, Heap* heap, Inst inst) {
         offset < stack->lcl_len &&
         offset + stack->lcl < stack->sp
       ) {
-        stack->ops[offset + stack->lcl] = spop(stack);
+        if (!spop(stack, &stack->ops[offset + stack->lcl]))
+          STACK_UNDERFLOW_ERROR;
       } else {
         if (offset >= stack->lcl_len) {
           SEG_OVERFLOW_ERROR(&inst, stack->lcl_len);
@@ -189,56 +106,66 @@ void exec_pop(Stack* stack, Heap* heap, Inst inst) {
       }
       break;
     case STAT:
-      if (offset < STAT_SIZE) {
-        static_seg[offset] = spop(stack);
+      if (offset < MEM_STAT_SIZE) {
+        if (!spop(stack, &mem->_static[offset]))
+          STACK_UNDERFLOW_ERROR;
       } else {
-        SEG_OVERFLOW_ERROR(&inst, STAT_SIZE);
+        SEG_OVERFLOW_ERROR(&inst, MEM_STAT_SIZE);
       }
       break;
-    case CONST:
-      // `pop`ping to constant deletes the value.
-      (void) spop(stack);
+    case CONST: {
+        // `pop`ping to constant deletes the value.
+        Word val;
+        if (!spop(stack, &val))
+          STACK_UNDERFLOW_ERROR;
+      }
       break;
     case THIS:
-      if (offset + heap->_this <= MEM_SIZE) {
+      if (offset + heap->_this <= MEM_HEAP_SIZE) {
         // If we land here, then `offset + heap->_this` fits
         // a `uint16_t`.
-        heap_set(*heap, (Addr)(offset + heap->_this), spop(stack));
+        Word val;
+        if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR;
+        heap_set(*heap, (Addr)(offset + heap->_this), val);
       } else {
         ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);
       }
       break;
     case THAT:
-      if (offset + heap->that <= MEM_SIZE) {
-        heap_set(*heap, (Addr)(offset + heap->that), spop(stack));
+      if (offset + heap->that <= MEM_HEAP_SIZE) {
+        Word val;
+        if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR;
+        heap_set(*heap, (Addr)(offset + heap->that), val);
       } else {
         ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);
       }
       break;
     case PTR:
       if (offset == 0) {
-        heap->_this = spop(stack);
+        if (!spop(stack, (Word*) &heap->_this))
+          STACK_UNDERFLOW_ERROR;
       } else if (offset == 1) {
-        heap->that = spop(stack);
+        if (!spop(stack, (Word*) &heap->that))
+          STACK_UNDERFLOW_ERROR;
       } else {
         POINTER_SEGMENT_ERROR(offset);
       }
       return;
     case TMP:
-      if (offset < TMP_SIZE) {
-        temp_seg[offset] = spop(stack);
+      if (offset < MEM_TEMP_SIZE) {
+        if (!spop(stack, &mem->tmp[offset]))
+          STACK_UNDERFLOW_ERROR;
       } else {
-        SEG_OVERFLOW_ERROR(&inst, TMP_SIZE)
+        SEG_OVERFLOW_ERROR(&inst, MEM_TEMP_SIZE)
       }
       break;
   }
 }
 
-void exec_push(Stack* stack, const Heap* heap, Inst inst) {
+void exec_push(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
   assert(stack != NULL);
-  assert(stack->ops != NULL);
   assert(heap != NULL);
-  assert(heap->mem != NULL);
+  assert(mem != NULL);
   
   size_t offset = inst.mem.offset;
 
@@ -272,10 +199,10 @@ void exec_push(Stack* stack, const Heap* heap, Inst inst) {
       }
       break;
     case STAT:
-      if (offset < STAT_SIZE) {
-        spush(stack, static_seg[offset]);
+      if (offset < MEM_STAT_SIZE) {
+        spush(stack, mem->_static[offset]);
       } else {
-        SEG_OVERFLOW_ERROR(&inst, STAT_SIZE);
+        SEG_OVERFLOW_ERROR(&inst, MEM_STAT_SIZE);
       }
       break;
     case CONST:
@@ -284,14 +211,14 @@ void exec_push(Stack* stack, const Heap* heap, Inst inst) {
       spush(stack, (Word) inst.mem.offset);  // `Word` is `uint16_t`.
       return;
     case THIS:
-      if (offset + heap->_this <= MEM_SIZE) {
+      if (offset + heap->_this <= MEM_HEAP_SIZE) {
         spush(stack, heap_get(*heap, (Addr)(offset + heap->_this)));
       } else {
         ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);        
       }
       break;
     case THAT:
-      if (offset + heap->that <= MEM_SIZE) {
+      if (offset + heap->that <= MEM_HEAP_SIZE) {
         spush(stack, heap_get(*heap, (Addr)(offset + heap->that)));
       } else {
         ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);        
@@ -302,33 +229,42 @@ void exec_push(Stack* stack, const Heap* heap, Inst inst) {
       // used to the the addresses of the `this` and `that`
       // segments.
       if (offset == 0) {
-        assert(heap->_this <= MEM_SIZE);
+        assert(heap->_this <= MEM_HEAP_SIZE);
         spush(stack, (Word) heap->_this);
       } else if (offset == 1) {
-        assert(heap->that <= MEM_SIZE);
+        assert(heap->that <= MEM_HEAP_SIZE);
         spush(stack, (Word) heap->that);
       } else {
         POINTER_SEGMENT_ERROR(offset);
       }
       return;
     case TMP:
-      if (offset < TMP_SIZE) {
-        spush(stack, temp_seg[offset]);
+      if (offset < MEM_TEMP_SIZE) {
+        spush(stack, mem->tmp[offset]);
       } else {
-        SEG_OVERFLOW_ERROR(&inst, TMP_SIZE)
+        SEG_OVERFLOW_ERROR(&inst, MEM_TEMP_SIZE)
       }
       break;
   }
 }
 
+// Extended word to allow buffering
+// and checking if overflows occured
+// on itermediate results.
+typedef uint32_t Wordbuf;
+
 static inline void exec_add(Stack* stack) {
   assert(stack != NULL);
 
-  Wordbuf y = (Wordbuf) spop(stack);
-  Wordbuf x = (Wordbuf) spop(stack);
-  Wordbuf sum = x + y;
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
+  Wordbuf sum = (Wordbuf) x + (Wordbuf) y;
 
-  if (sum <= MEM_SIZE) {
+  if (sum <= BIT16_LIMIT) {
     spush(stack, (Word) sum);
   } else {
     // Since `spop` doesn't delete anything,
@@ -342,8 +278,12 @@ static inline void exec_add(Stack* stack) {
 static inline void exec_sub(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
-  Word x = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
 
   if (x >= y) {
     spush(stack, x - y);
@@ -356,7 +296,9 @@ static inline void exec_sub(Stack* stack) {
 static inline void exec_neg(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
   // Two's complement negation.
   y = ~y;
   y += 1;
@@ -366,8 +308,12 @@ static inline void exec_neg(Stack* stack) {
 static inline void exec_and(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
-  Word x = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
 
   spush(stack, x & y);
 }
@@ -375,8 +321,12 @@ static inline void exec_and(Stack* stack) {
 static inline void exec_or(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
-  Word x = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
 
   spush(stack, x | y);
 }
@@ -384,7 +334,9 @@ static inline void exec_or(Stack* stack) {
 static inline void exec_not(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
   spush(stack, ~y);
 }
 
@@ -400,8 +352,12 @@ static inline void exec_not(Stack* stack) {
 static inline void exec_eq(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
-  Word x = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
 
   spush(stack, x == y ? TRUE : FALSE);
 }
@@ -409,8 +365,12 @@ static inline void exec_eq(Stack* stack) {
 static inline void exec_lt(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
-  Word x = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
 
   spush(stack, x < y ? TRUE : FALSE);
 }
@@ -418,82 +378,117 @@ static inline void exec_lt(Stack* stack) {
 static inline void exec_gt(Stack* stack) {
   assert(stack != NULL);
 
-  Word y = spop(stack);
-  Word x = spop(stack);
+  Word y;
+  if (!spop(stack, &y))
+    STACK_UNDERFLOW_ERROR;
+  Word x;
+  if (!spop(stack, &x))
+    STACK_UNDERFLOW_ERROR;
 
   spush(stack, x > y ? TRUE : FALSE);
 }
 
-static inline void exec_goto(SymbolTable st, const char* ident, size_t* num_inst) {
-  assert(num_inst != NULL);
-  assert(ident != NULL);
+/* Get the currently active file */
+#define active_file(prog) (prog->files[prog->fi])
 
-  struct SymVal val;
-  struct SymKey key = mk_key(ident, SBT_LABEL);
-  GetResult get_res = get_st(st, &key, &val);
+/* Get current instruction */
+#define active_inst(prog) (prog->files[prog->fi].insts->cell[prog->files[prog->fi].ei])
+
+#define JMP_OK 1
+#define JMP_ERR 0
+
+static int jump_to(struct Program* prog, struct SymKey key, struct SymVal* val) {
+  assert(prog != NULL);
+  assert(val != NULL);
+
+  GetResult get_res = get_st(active_file(prog).st, &key, val);
 
   if (get_res == GTRES_OK) {
-    /* `- 1` is required here because the execution loop
-     * will increase `num_inst` by one after this function
-     * is called. However, `jmp_inst` already points to the
-     * *next* instruction and not to the one of the goto itself.
-     * This means that we subtract one to make up for adding
-     * one at the end of the loop.
-     */
-    *num_inst = val.inst_addr - 1;
+    /* Change instruction in active file. */
+    active_file(prog).ei = val->inst_addr - 1;
+    return JMP_OK;
   } else {
-    CTRL_FLOW_ERROR(ident);
+    unsigned int prev_fi = prog->fi;
+    GetResult get_res;
+
+    for (unsigned int next_fi = 0; next_fi < prog->nfiles; next_fi++) {
+      /* Don't re-check the active file. */
+      if (prev_fi != next_fi) {
+        get_res = get_st(prog->files[next_fi].st, &key, val);
+        if (get_res == GTRES_OK) {
+          prog->fi = next_fi;  /* Change the file we are in. */
+          active_file(prog).ei = val->inst_addr - 1;
+          break;
+        }
+      }
+    }
+
+    return get_res == GTRES_ERR
+      ? JMP_ERR
+      : JMP_OK;
   }
 }
 
-static inline void exec_if_goto(Stack* stack, SymbolTable st, const char* ident, size_t* num_inst) {
-  assert(stack != NULL);
-  assert(num_inst != NULL);
-  assert(ident != NULL);
+static inline void exec_goto(struct Program* prog) {
+  assert(prog != NULL);
 
-  Word val = spop(stack);
-  // Jump if topmost value is true.
+  struct SymVal val;
+  struct SymKey key = mk_key(
+    active_file(prog).insts->cell[active_file(prog).ei].ident,
+    SBT_LABEL
+  );
+  if (!jump_to(prog, key, &val))
+    CTRL_FLOW_ERROR(key.ident);
+  /* Else everything went well. */
+}
+
+static inline void exec_if_goto(struct Program* prog) {
+  assert(prog != NULL);
+
+  Word val;
+  if (!spop(&prog->stack, &val))
+    STACK_UNDERFLOW_ERROR;
+
+  /* Jump if topmost value is true. */
+
   if (val != FALSE) {
     struct SymVal val;
-    struct SymKey key = mk_key(ident, SBT_LABEL);
-    GetResult get_res = get_st(st, &key, &val);
+    struct SymKey key = mk_key(
+      active_file(prog).insts->cell[active_file(prog).ei].ident,
+      SBT_LABEL
+    );
 
-    if (get_res == GTRES_OK) {
-      // See `exec_goto` for reason for subtraction.
-      *num_inst = val.inst_addr - 1;
-    } else {
-      // Restore poping `val` off the stack.
-      stack->sp ++;
-      CTRL_FLOW_ERROR(ident);
+    if (!jump_to(prog, key, &val)) {
+      /* Restore poping `val` off the stack. */
+      prog->stack.sp ++;
+      CTRL_FLOW_ERROR(key.ident);
     }
   }
 }
 
-static inline void exec_call(
-  Stack* stack,
-  Heap* heap,
-  SymbolTable st,
-  const char* ident,
-  uint16_t nargs,
-  size_t* num_inst
-) {
-  assert(stack != NULL);
-  assert(heap != NULL);
-  assert(ident != NULL);
-  assert(num_inst != NULL);
+static inline void exec_call(struct Program* prog) {
+  assert(prog != NULL);
+
+  const char* ident = active_file(prog).insts->cell[active_file(prog).ei].ident;
+  Word nargs = active_file(prog).insts->cell[active_file(prog).ei].nargs;
+  Stack* stack = &prog->stack;
+  Heap* heap = &prog->heap;
+
+  Addr ret_ei = active_file(prog).ei;
+  Addr ret_fi = prog->fi;
 
   if (nargs > stack->sp)
     NARGS_ERROR(nargs, stack->sp);
 
   struct SymVal val;
   struct SymKey key = mk_key(ident, SBT_FUNC);
-  GetResult get_res = get_st(st, &key, &val);
-
-  if (get_res == GTRES_ERR)
+  if (!jump_to(prog, key, &val))
     CTRL_FLOW_ERROR(ident);
 
-  // Push return address on the stack.
-  spush(stack, (Word) *num_inst);
+  // Push return execution index on the stack.
+  spush(stack, (Word) ret_ei);
+  // Push the return file index on the stack.
+  spush(stack, (Word) ret_fi);
   // Push caller's `LCL` on stack.
   spush(stack, (Word) stack->lcl);
   spush(stack, (Word) stack->lcl_len);
@@ -506,13 +501,13 @@ static inline void exec_call(
   spush(stack, (Word) heap->that);
 
   /* Set `ARG` for new function.
-   * `7` accounts for the return address etc. on stack.
+   * `8` accounts for the return address etc. on stack.
    * `nargs` is the number of arguments assumed are
    * on stack right now (according to the `call` invocation).
    * `nargs` is checked at the beginning of this function to
    * avoid underflows here.
    */
-  stack->arg = stack->sp - 7 - nargs;
+  stack->arg = stack->sp - 8 - nargs;
   stack->arg_len = nargs;
 
   // Set `LCL` for new function and allocate locals.
@@ -522,24 +517,30 @@ static inline void exec_call(
     spush(stack, 0);
 
   // Now we're ready to jump to the start of the function.
-  *num_inst = val.inst_addr - 1;
+  active_file(prog).ei = val.inst_addr - 1;
 }
 
-void exec_ret(Stack* stack, Heap* heap, size_t* num_inst) {
-  assert(stack != NULL);
-  assert(heap != NULL);
-  assert(num_inst != NULL);
+void exec_ret(struct Program* prog) {
+  assert(prog != NULL);
+
+  Stack* stack = &prog->stack;
+  Heap* heap = &prog->heap;
 
   // `LCL` always points to the stack position
   // right after all of the caller's segments
   // etc. have been pushed.
   Addr frame = stack->lcl;
-  // The return address was pushed first.
-  Addr ret_addr = stack->ops[frame - 7];
+  // Execution index and file index were pushed
+  // first in this sequence.
+  Addr ret_ei = stack->ops[frame - 8];
+  Addr ret_fi = stack->ops[frame - 7];
+
   // `ARG` always points to the first argument
   // pushed on the stack by the caller. This is
   // where the caller will expect the return value.
-  stack->ops[stack->arg] = spop(stack);
+  if (!spop(stack, &stack->ops[stack->arg]))
+    STACK_UNDERFLOW_ERROR;
+
   stack->sp = stack->arg + 1;
   // Restore the rest of the registers which
   // have been pushed on stack.
@@ -550,91 +551,71 @@ void exec_ret(Stack* stack, Heap* heap, size_t* num_inst) {
   stack->lcl_len = stack->ops[frame - 5];
   stack->lcl     = stack->ops[frame - 6];
 
+  /* Jump ! */
+
+  prog->fi = ret_fi;
   // Don't subtract here (see `exec_call` and `exec_goto`)!
-  *num_inst = ret_addr;
+  prog->files[prog->fi].ei = ret_ei;
 }
 
-/*
- * TODO: Handle special call-loop REPL case if the
- * function which will be called has the instruction
- * address 0 and the call is only executed in the
- * initial isolated test. In this case it will jump
- * endlessly because 0 is actually a valid address
- * in this setting
- */
-
-int exec(Stack* stack, Heap* heap, SymbolTable* st, const Insts* insts) {
-  assert(stack != NULL);
-  assert(insts != NULL);
+int exec(struct Program* prog) {
+  assert(prog != NULL);
 
   int arrive = setjmp(exec_env);
   if (arrive == EXEC_ERR)
     return EXEC_ERR;
 
-  for (size_t i = 0; i < insts->idx; i++) {
-    switch(insts->cell[i].code) {
+  /* Reaching the end of any file is enough to end execution.
+   * `insts->idx` points to the next unused instruction field
+   * in the instruction buffer from parsing. Thus it can be
+   * used here as the number of instructions in the buffer. */
+
+  for (; active_file(prog).ei < active_file(prog).insts->idx; active_file(prog).ei ++) {
+    switch(active_inst(prog).code) {
       case POP:
         exec_pop(
-          stack,
-          heap,
-          insts->cell[i]
+          active_inst(prog),
+          &prog->stack,
+          &prog->heap,
+          &active_file(prog).mem
         );
         break;
       case PUSH:
         exec_push(
-          stack,
-          heap,
-          insts->cell[i]
+          active_inst(prog),
+          &prog->stack,
+          &prog->heap,
+          &active_file(prog).mem
         );
         break;
       case ADD:
-        exec_add(stack); break;
+        exec_add(&prog->stack); break;
       case SUB:
-        exec_sub(stack); break;
+        exec_sub(&prog->stack); break;
       case NEG:
-        exec_neg(stack); break;
+        exec_neg(&prog->stack); break;
       case AND:
-        exec_and(stack); break;
+        exec_and(&prog->stack); break;
       case OR:
-        exec_or(stack); break;
+        exec_or(&prog->stack); break;
       case NOT:
-        exec_not(stack); break;
+        exec_not(&prog->stack); break;
       case EQ:
-        exec_eq(stack); break;
+        exec_eq(&prog->stack); break;
       case LT:
-        exec_lt(stack); break;
+        exec_lt(&prog->stack); break;
       case GT:
-        exec_gt(stack); break;
+        exec_gt(&prog->stack); break;
       case GOTO:
-        if (st != NULL)
-          exec_goto(*st, insts->cell[i].ident, &i);
-        else
-          MISSING_ST_ERROR(&insts->cell[i]);
-        break;
+        exec_goto(prog); break;
       case IF_GOTO:
-        if (st != NULL)
-          exec_if_goto(stack, *st, insts->cell[i].ident, &i);
-        else
-          MISSING_ST_ERROR(&insts->cell[i]);
-        break;
+        exec_if_goto(prog); break;
       case CALL:
-        if (st != NULL)
-          exec_call(
-            stack,
-            heap,
-            *st,
-            insts->cell[i].ident,
-            insts->cell[i].nargs,
-            &i
-          );
-        else
-          MISSING_ST_ERROR(&insts->cell[i]);
-        break;
+        exec_call(prog); break;
       case RET:
-        exec_ret(stack, heap, &i);
-        break;
+        exec_ret(prog); break;
       default: {
-        INST_STR(str, &insts->cell[i]);
+        INST_STR(str, &active_file(prog).insts->cell[active_file(prog).ei]);
         errf("invalid inststruction `%s`; programmer mistake", str);
         return EXEC_ERR;
       }

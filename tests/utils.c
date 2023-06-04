@@ -2,6 +2,8 @@
 
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
+#include <unistd.h>
 
 int check_stream(const char* expect, size_t nnoise, FILE* stream) {
   assert(expect != NULL);
@@ -26,3 +28,13 @@ int check_stream(const char* expect, size_t nnoise, FILE* stream) {
     : 1;
 }
 
+const char* setup_tmp(char* fn, const char* cnt) {
+  int fd = mkstemp(fn);
+  assert(fd != -1);
+  FILE* f = fdopen(fd, "w");
+  assert(f != NULL);
+  fputs(cnt, f);
+  fclose(f);
+  close(fd);
+  return fn;
+}

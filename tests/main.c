@@ -1,4 +1,4 @@
-// [µnit test framework](https://github.com/nemequ/munit) 
+// [µnit test framework](https://github.com/nemequ/munit)
 #define MUNIT_ENABLE_ASSERT_ALIASES
 #include "munit.h"
 
@@ -6,6 +6,7 @@ extern MunitTest scan_tests[];
 extern MunitTest parse_tests[];
 extern MunitTest exec_tests[];
 extern MunitTest st_tests[];
+extern MunitTest prog_tests[];
 
 static MunitSuite suites[] = {
   {
@@ -32,6 +33,13 @@ static MunitSuite suites[] = {
   {
     "/st",
     st_tests,
+    NULL,
+    1,
+    MUNIT_SUITE_OPTION_NONE
+  },
+  {
+    "/prog",
+    prog_tests,
     NULL,
     1,
     MUNIT_SUITE_OPTION_NONE

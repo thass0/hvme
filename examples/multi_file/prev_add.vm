@@ -1,0 +1,14 @@
+// prev_add (a) -> sum
+
+function prev_add 0
+	// Add the argument to the
+	// value in `static`.
+	push argument 0
+	push static 0
+	add
+
+	// Store the result in `static`.
+	pop static 0
+	push static 0
+
+	return

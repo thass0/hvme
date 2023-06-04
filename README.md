@@ -17,18 +17,15 @@ This computes the 16th element in the Fibonacci sequence (987).
 
 ## To Do
 
-- [ ] Add error context to execution.
+- [ ] Add file position to execution errors.
+
+- [ ] Add syntax highlighting to Helix editor
 
 - [x] Improve identifier messaging.
 
-- [ ] Combine multiple files and manage their static data.
-
-      - [ ] Logically group different `Insts` and `SymbolTable` instances.
-
-      - [ ] Find a strategy to execute code while jumping between files.
-
-
 - [x] Add function, call and return (finishes up language spec)
+
+- [x] Combine multiple files and manage their static data.
 
 ### REPL (abandoned)
 

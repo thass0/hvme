@@ -124,18 +124,6 @@ TEST(find_num_remaining) {
   return MUNIT_OK;
 }
 
-// `fn` must be a char array.
-const char* setup_tmp(char* fn, const char* cnt) {
-  int fd = mkstemp(fn);
-  assert(fd != -1);
-  FILE* f = fdopen(fd, "w");
-  assert(f != NULL);
-  fputs(cnt, f);
-  fclose(f);
-  close(fd);
-  return fn;
-}
-
 TEST(scan_along_block_borders) {
   assert_int(SCAN_BLOCK_SIZE, ==, MAX_TOKEN_LEN);
   {  // Scanning normal items over borders works.

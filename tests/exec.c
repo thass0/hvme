@@ -8,23 +8,36 @@
 #include <stdio.h>
 #include <string.h>
 
-static inline Insts* setup_insts(Inst* cell, size_t len) {
-  Insts* insts = new_insts(NULL);
-  free(insts->cell);
-  insts->cell = cell;
-  insts->len = len;
-  // The `idx` entry should point one index
-  // past the last valid one.
-  insts->idx = len;
-  return insts;
-}
+/* From `src/prog.c`. */
+extern struct Memory new_mem(void);
 
-static inline void cleanup_insts(Insts* insts) {
-  if (insts != NULL) {
-    // Don't free `cell` since it's a static array.
-    free(insts->filename);
-    free(insts);
-  }
+#define TEST_PROG_NAME "test_internal"
+
+static struct Program* setup_prog(Inst* arr, size_t len) {
+  struct File* file = (struct File*) calloc (1, sizeof(struct File));
+  file->filename =
+    (char*) calloc (strlen(TEST_PROG_NAME) + 1, sizeof(char));
+  assert(file->filename != NULL);
+  strcpy(file->filename, TEST_PROG_NAME);
+  file->st = new_st();
+  file->insts = new_insts(TEST_PROG_NAME);
+  file->insts->cell =
+    (Inst*) realloc (file->insts->cell, len * sizeof(Inst));
+  memcpy(file->insts->cell, arr, len * sizeof(Inst));
+  file->insts->len = len;
+  file->insts->idx = len;
+  file->mem = new_mem();
+  file->ei = 0;
+
+  struct Program* prog = (struct Program*) calloc (1, sizeof(struct Program));
+  assert(prog != NULL);
+  prog->files = file;
+  prog->nfiles = 1;
+  prog->fi = 0;
+  prog->heap = new_heap();
+  prog->stack = new_stack();
+
+  return prog;
 }
 
 TEST(correct_stack_errors) {
@@ -32,13 +45,9 @@ TEST(correct_stack_errors) {
     Inst inst_arr[] = {
       {.code=POP, .mem={.seg=TMP, .offset=0}},
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 1);
-    int res = exec(&s, &h, NULL, insts);
-    del_stack(s);
-    del_heap(h);
-    cleanup_insts(insts);
+    struct Program* prog = setup_prog(inst_arr, 1);
+    int res = exec(prog);
+    del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("stack underflow", 20, stderr), ==, 1);
   }
@@ -51,13 +60,9 @@ TEST(correct_memory_errors) {
     Inst inst_arr[] = {
       { .code=PUSH, .mem={ .seg=PTR, .offset=2 }},
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 1);
-    int res = exec(&s, &h, NULL, insts);
-    del_stack(s);
-    del_heap(h);
-    cleanup_insts(insts);
+    struct Program* prog = setup_prog(inst_arr, 1);
+    int res = exec(prog);
+    del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("can't access pointer segment at `2` (max. index is 1).", 20, stderr), ==, 1);
   }
@@ -68,13 +73,9 @@ TEST(correct_memory_errors) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},  // Push another value on stack.
       { .code=POP, .mem={ .seg=THIS, .offset=1 }},  // Pop this value to address 0xFFFF + 1 -> overflow
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 4);
-    int res = exec(&s, &h, NULL, insts);
-    del_stack(s);
-    del_heap(h);
-    cleanup_insts(insts);
+    struct Program* prog = setup_prog(inst_arr, 4);
+    int res = exec(prog);
+    del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("address overflow: "
       "`pop this 1` tries to access RAM at 65536.", 20, stderr), ==, 1);
@@ -90,13 +91,9 @@ TEST(arithmetic_errors) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
       { .code=ADD },
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 3);
-    int res = exec(&s, &h, NULL, insts);
-    del_stack(s);
-    del_heap(h);
-    cleanup_insts(insts);
+    struct Program* prog = setup_prog(inst_arr, 3);
+    int res = exec(prog);
+    del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("addition overflow: 65535 + 1 = 65536 > 65535", 20, stderr), ==, 1);
   }
@@ -106,13 +103,9 @@ TEST(arithmetic_errors) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
       { .code=SUB },
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 3);
-    int res = exec(&s, &h, NULL, insts);
-    del_stack(s);
-    del_heap(h);
-    cleanup_insts(insts);
+    struct Program* prog = setup_prog(inst_arr, 3);
+    int res = exec(prog);
+    del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("subtraction underflow: 0 - 1 = -1 < 0", 20, stderr), ==, 1);
   }
@@ -132,21 +125,15 @@ TEST(arithmetic_instructions) {
     { .code=PUSH, .mem={ .seg=CONST, .offset=2 }},
     { .code=ADD },
   };
-  Stack s = new_stack();
-  Heap h = new_heap();
-  Insts* insts = setup_insts(inst_arr, 9);
-  int res = exec(&s, &h, NULL, insts);
-  del_heap(h);
+  struct Program* prog = setup_prog(inst_arr, 9);
+  int res = exec(prog);
   assert_int(res, ==, 0);
-  assert_int(s.ops[s.sp - 1], ==, 3);
-  cleanup_insts(insts);
-  del_stack(s);
+  assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 3);
+  del_prog(prog);
   return MUNIT_OK;
 }
 
 TEST(stack_buildup_works) {
-  Stack s = new_stack();
-  Heap h = new_heap();
   // Buildup
   Inst inst_arr1[] = {
     { .code=PUSH, .mem={ .seg=CONST, .offset=7 }},
@@ -154,68 +141,19 @@ TEST(stack_buildup_works) {
     { .code=PUSH, .mem={ .seg=CONST, .offset=13 }},
     { .code=PUSH, .mem={ .seg=CONST, .offset=17 }},
     { .code=PUSH, .mem={ .seg=CONST, .offset=19 }},
-  };
-  Insts* insts1 = setup_insts(inst_arr1, 5);
-  int res1 = exec(&s, &h, NULL, insts1);
-  cleanup_insts(insts1);
-  assert_int(res1, ==, 0);
-  assert_int(s.len, ==, 6);
-  assert_int(s.sp, ==, 5);
-
-  // Deletion
-  Inst inst_arr2[] = {
     { .code=POP, .mem={ .seg=CONST, .offset=0 }},
     { .code=POP, .mem={ .seg=CONST, .offset=0 }},
     { .code=POP, .mem={ .seg=CONST, .offset=0 }},
     { .code=ADD },
   };
-  Insts* insts2 =  setup_insts(inst_arr2, 4);
-  int res2 = exec(&s, &h, NULL, insts2);
-  del_heap(h);
-  cleanup_insts(insts2);
-  assert_int(res2, ==, 0);
-  assert_int(s.len, ==, 2);
-  assert_int(s.sp, ==, 1);
-  assert_int(s.ops[s.sp - 1], ==, 18);
+  struct Program* prog = setup_prog(inst_arr1, 9);
+  int res = exec(prog);
+  assert_int(res, ==, 0);
+  assert_int(prog->stack.len, ==, 2);
+  assert_int(prog->stack.sp, ==, 1);
+  assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 18);
 
-  del_stack(s);
-  return MUNIT_OK;
-}
-
-TEST(segment_addressing_works) {
-  Inst set_arr[] = {
-    { .code=PUSH, .mem={ .seg=CONST, .offset=2207}},
-    { .code=POP, .mem={ .seg=STAT, .offset=0 }},
-  };
-  Inst check_arr[] = {
-    { .code=PUSH, .mem={ .seg=STAT, .offset=0 }},
-  };
-
-  Insts* set_insts = setup_insts(set_arr, 2);
-  Insts* check_insts = setup_insts(check_arr, 1);
-
-  // NOTE: `local` and `argument` aren't included in this
-  // test since they are only available to functions.
-
-  for (int seg = STAT; seg <= TMP; seg++) {
-    if (seg == CONST)  // Skip pseudo segment.
-      continue;
-    Stack s = new_stack();
-    Heap h = new_heap();
-    set_arr[1].mem.seg = (Segment) seg;
-    check_arr[0].mem.seg = (Segment) seg;
-    int set_res = exec(&s, &h, NULL, set_insts);
-    assert_int(set_res, ==, 0);
-    assert_int(s.sp, ==, 0);
-    int check_res = exec(&s, &h, NULL, check_insts);
-    assert_int(check_res, ==, 0);
-    assert_int(s.ops[s.sp - 1], ==, 2207);
-    del_stack(s);
-    del_heap(h);
-  }
-
-  cleanup_insts(set_insts);
-  cleanup_insts(check_insts);
+  del_prog(prog);
 
   return MUNIT_OK;
 }
@@ -229,16 +167,12 @@ TEST(stack_doesnt_change_on_error) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=9 }},
       { .code=ADD },
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 3);
-    int res = exec(&s, &h, NULL, insts);
+    struct Program* prog = setup_prog(inst_arr, 3);
+    int res = exec(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(s.ops[s.sp - 1], ==, 9);
-    assert_int(s.ops[s.sp - 2], ==, 65535);
-    cleanup_insts(insts);
-    del_stack(s);
-    del_heap(h);
+    assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 9);
+    assert_int(prog->stack.ops[prog->stack.sp - 2], ==, 65535);
+    del_prog(prog);
   } {
     // Stack should not change if a pop's
     // address would have overflowed.
@@ -248,16 +182,12 @@ TEST(stack_doesnt_change_on_error) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
       { .code=POP, .mem={ .seg=THIS, .offset=1 }},
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 4);
-    int res = exec(&s, &h, NULL, insts);
+    struct Program* prog = setup_prog(inst_arr, 4);
+    int res = exec(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(s.sp, ==, 1);
-    assert_int(s.ops[s.sp - 1], ==, 1);
-    cleanup_insts(insts);
-    del_stack(s);
-    del_heap(h);
+    assert_int(prog->stack.sp, ==, 1);
+    assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 1);
+    del_prog(prog);
   } {
     // Stack should not change if a push's
     // address would have overflowed.
@@ -267,16 +197,12 @@ TEST(stack_doesnt_change_on_error) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
       { .code=PUSH, .mem={ .seg=THIS, .offset=1 }},
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 4);
-    int res = exec(&s, &h, NULL, insts);
+    struct Program* prog = setup_prog(inst_arr, 4);
+    int res = exec(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(s.sp, ==, 1);
-    assert_int(s.ops[s.sp - 1], ==, 1);
-    cleanup_insts(insts);
-    del_stack(s);
-    del_heap(h);
+    assert_int(prog->stack.sp, ==, 1);
+    assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 1);
+    del_prog(prog);
   } {
     // Stack should not change if a pop
     // tried to access an invald pointer
@@ -285,16 +211,12 @@ TEST(stack_doesnt_change_on_error) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
       { .code=POP, .mem={ .seg=PTR, .offset=2 }},
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 2);
-    int res = exec(&s, &h, NULL, insts);
+    struct Program* prog = setup_prog(inst_arr, 2);
+    int res = exec(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(s.sp, ==, 1);
-    assert_int(s.ops[s.sp - 1], ==, 1);
-    cleanup_insts(insts);
-    del_stack(s);
-    del_heap(h);
+    assert_int(prog->stack.sp, ==, 1);
+    assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 1);
+    del_prog(prog);
   } {
     // The stack should not change if the
     // subtraction would have overflowed.
@@ -303,16 +225,12 @@ TEST(stack_doesnt_change_on_error) {
       { .code=PUSH, .mem={ .seg=CONST, .offset=1 }},
       { .code=SUB },
     };
-    Stack s = new_stack();
-    Heap h = new_heap();
-    Insts* insts = setup_insts(inst_arr, 3);
-    int res = exec(&s, &h, NULL, insts);
+    struct Program* prog = setup_prog(inst_arr, 3);
+    int res = exec(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(s.ops[s.sp - 1], ==, 1);
-    assert_int(s.ops[s.sp - 2], ==, 0);
-    cleanup_insts(insts);
-    del_stack(s);
-    del_heap(h);
+    assert_int(prog->stack.ops[prog->stack.sp - 1], ==, 1);
+    assert_int(prog->stack.ops[prog->stack.sp - 2], ==, 0);
+    del_prog(prog);
   }
 
   return MUNIT_OK;
@@ -325,7 +243,6 @@ MunitTest exec_tests[] = {
   REG_TEST(arithmetic_instructions),
   REG_TEST(stack_doesnt_change_on_error),
   REG_TEST(stack_buildup_works),
-  REG_TEST(segment_addressing_works),
   { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 

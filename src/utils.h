@@ -11,6 +11,8 @@
 
 #define VME_VERSION "0.0.1"
 
+#define SOLUTION_ARROW "\t\033[34;3m->\033[m "
+
 // Marcros to print warings, errors, etc.
 #define warnf(fmt, ...) \
   fprintf(stderr, "\033[33mWarn:\033[0m " fmt "\n", __VA_ARGS__)
@@ -33,10 +35,10 @@
   printf("\033[" sq)
 
 
-// Returns the file name of the file to execute
+// Returns the names of the files to execute
 // or `NULL` if the arguments were invalid.
 // Exit in case this function returns `NULL`.
-const char* parse_args(int argc, const char* argv[]);
+char** parse_args(int argc, const char* argv[]);
 
 // Print a warning if the file extension of the
 // given file is not `.vm`.

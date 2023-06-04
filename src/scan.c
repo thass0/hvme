@@ -369,7 +369,10 @@ static inline int ident(const char* blk, size_t len, size_t* offset, Pos* pos) {
   if (nchars > MAX_IDENT_LEN)
     warn_trunc_ident(blk + *offset, nchars, MAX_IDENT_LEN);
 
-  strncpy(ident_buf, blk + *offset, MAX_IDENT_LEN);
+  size_t nleft = len - *offset;  /* Number of chars left in buffer after offset */
+  strncpy(ident_buf, blk + *offset, MAX_IDENT_LEN > nleft ? nleft : MAX_IDENT_LEN);
+  /* `nchars` might be larger than `MAX_IDENT_LEN`. Place
+   * the NULL-terminator so it doesn't exceed the buffer. */
   ident_buf[nchars >= MAX_IDENT_LEN ? MAX_IDENT_LEN : nchars] = '\0';
 
   incby(nchars, offset, pos);

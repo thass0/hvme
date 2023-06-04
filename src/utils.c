@@ -7,11 +7,17 @@
 #define EXEC_NAME "vme"
 #endif
 
-#define SOLUTION_ARROW "\t\033[34;3m->\033[m "
-
-const char* parse_args(int argc, const char* argv[]) {
-  if (argc == 2) {
-    return argv[1];
+char** parse_args(int argc, const char* argv[]) {
+  if (argc > 1) {
+    char** arr = (char**) calloc (argc, sizeof(char));
+    /* `calloc` implicityly null-termiantes `arr`
+     * because we allocate one entry more than we
+     * need. */
+    for (int i = 1; i < argc; i++) {
+      arr[i - 1] = (char*) calloc (strlen(argv[i]) + 1, sizeof(char));
+      strcpy(arr[i - 1], argv[i]);
+    }
+    return arr;
   } else {
     return NULL;
   }
@@ -71,7 +77,7 @@ Insts* gen_startup(const SymbolTable* st) {
   struct SymVal val;
   struct SymKey si_key = mk_key("Sys.init", SBT_FUNC);
   if (get_st(*st, &si_key, &val) != GTRES_OK) {
-    err("there's no `Sys.init` function.\n" SOLUTION_ARROW "Write one");
+    
     return NULL;
   }
 

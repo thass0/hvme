@@ -17,4 +17,6 @@
 
 int check_stream(const char* expect, size_t nnoise, FILE* stream);
 
+const char* setup_tmp(char* fn, const char* cnt);
+
 #endif  // _UTILS_H_

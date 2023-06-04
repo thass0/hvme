@@ -1,0 +1,11 @@
+function Sys.init 1
+	push constant 3
+	call prev_add 1
+	pop local 0
+	push constant 3
+	call prev_add 1
+	push local 0
+	call mult 2
+	return
+
+// Result must be 18.

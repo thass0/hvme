@@ -1,3 +1,5 @@
+// mult (a, b) -> product
+
 function mult 3
 	push argument 0
 	pop local 2
@@ -20,9 +22,3 @@ label end
 	push local 1
 
 	return
-
-function Sys.init 0
-	// Expected output: 4 * 8 = 32
-	push constant 4
-	push constant 8
-	call mult 2
