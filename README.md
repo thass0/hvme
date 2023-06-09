@@ -17,11 +17,13 @@ This computes the 16th element in the Fibonacci sequence (987).
 
 ## To Do
 
-- [ ] Add file position to execution errors.
+- [ ] Respect hidden stack content when popping
 
 - [ ] Add syntax highlighting to Helix editor
 
 - [x] Improve identifier messaging.
+
+- [x] Add file position to execution errors.
 
 - [x] Add function, call and return (finishes up language spec)
 

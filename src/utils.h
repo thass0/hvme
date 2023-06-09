@@ -5,6 +5,7 @@
 
 #include "st.h"
 #include "parse.h"
+#include "string.h"
 
 // Required for error and warning macros.
 #include <stdio.h>
@@ -14,25 +15,74 @@
 #define SOLUTION_ARROW "\t\033[34;3m->\033[m "
 
 // Marcros to print warings, errors, etc.
-#define warnf(fmt, ...) \
-  fprintf(stderr, "\033[33mWarn:\033[0m " fmt "\n", __VA_ARGS__)
+#define warnf(fmt, ...) {   \
+  fprintf(stderr,           \
+    "\033[33mWarn:\033[0m " \
+    fmt                     \
+    "\n",                   \
+    __VA_ARGS__);           \
+}
 
 #define warn(str) \
-  fputs("\033[33mWarn:\033[0m " str "\n", stderr)
+  { fputs("\033[33mWarn:\033[0m " str "\n", stderr); }
 
-#define errf(fmt, ...) \
-  fprintf(stderr, "\033[31mError:\033[0m " fmt "\n", __VA_ARGS__)
+/* Formatted error message. */
+#define errf(fmt, ...) {        \
+  fprintf(stderr,               \
+    "\033[31mError:\033[0m "    \
+    fmt                         \
+    "\n",                       \
+    __VA_ARGS__);               \
+}
 
-#define err(str) \
-  fputs("\033[31mError:\033[0m " str "\n", stderr)
+/* Formatted error message with source position. */
+#define perrf(pos, fmt, ...) {                   \
+  if ((pos).filename == NULL) {                  \
+    fprintf(stderr,                              \
+      "\033[31mError\033[0m (%d:%d):\033[0m "    \
+      fmt "\n",                                  \
+      (pos).ln, (pos).cl,                        \
+      __VA_ARGS__);                              \
+  } else {                                       \
+    fprintf(stderr,                              \
+      "\033[31mError\033[0m (%s:%d:%d):\033[0m " \
+      fmt "\n",                                  \
+      (pos).filename, (pos).ln, (pos).cl,        \
+      __VA_ARGS__);                              \
+ }                                               \
+}
+
+/* Unformatted error message. */
+#define err(str) {               \
+  fputs("\033[31mError:\033[0m " \
+    str                          \
+    "\n",                        \
+    stderr);                     \
+}
+
+/* Unformatted error message with source position. */
+#define perr(pos, str) {                   \
+  if ((pos).filename == NULL) {                  \
+    fprintf(stderr,                              \
+      "\033[31mError\033[0m (%d:%d):\033[0m "    \
+      str "\n",                                  \
+      (pos).ln, (pos).cl);                       \
+  } else {                                       \
+    fprintf(stderr,                              \
+      "\033[31mError\033[0m (%s:%d:%d):\033[0m " \
+      str "\n",                                  \
+      (pos).filename, (pos).ln, (pos).cl);       \
+ }                                               \
+}
+
 
 // Print any text enclosed in a Select Graphic Rendition control sequence
 #define sgr(sq, fmt, ...) \
-  printf("\033[" sq "m" fmt "\033[m\n", __VA_ARGS__)
+  { printf("\033[" sq "m" fmt "\033[m\n", __VA_ARGS__); }
 
 // Print a control sequence introducer followed by the given control sequence
 #define csi(sq) \
-  printf("\033[" sq)
+  { printf("\033[" sq) }
 
 
 // Returns the names of the files to execute

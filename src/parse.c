@@ -578,6 +578,12 @@ Insts* parse(const Items* items, SymbolTable* st) {
         // if it reaches the end of the input.
         res =
           parse_fns[it->t](&its, &insts->cell[insts->idx], items->filename);
+        /* Set the a pointer to the filename of
+         * the instruction's source file in the
+         * position instance. This is only a copy
+         * of the pointer and must not be freed or
+         * modified at any point. */
+        insts->cell[insts->idx].pos.filename = insts->filename;
         insts->idx ++;
         break;
     }

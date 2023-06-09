@@ -67,6 +67,10 @@ typedef uint16_t Uint;
 typedef struct {
   unsigned int ln;
   unsigned int cl;
+  /* Not used by the scanner because items
+   * doesn't contain a filename which will
+   * last long enought. */
+  const char* filename;
 } Pos;
 
 // Scanned item

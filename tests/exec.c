@@ -49,7 +49,7 @@ TEST(correct_stack_errors) {
     int res = exec(prog);
     del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(check_stream("stack underflow", 20, stderr), ==, 1);
+    assert_int(check_stream("stack underflow", 30, stderr), ==, 1);
   }
 
   return MUNIT_OK;
@@ -64,7 +64,7 @@ TEST(correct_memory_errors) {
     int res = exec(prog);
     del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(check_stream("can't access pointer segment at `2` (max. index is 1).", 20, stderr), ==, 1);
+    assert_int(check_stream("can't access pointer segment at `2` (max. index is 1)", 30, stderr), ==, 1);
   }
   {  // Raise error if combined address exceeds bounds
     Inst inst_arr[] = {
@@ -78,7 +78,7 @@ TEST(correct_memory_errors) {
     del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("address overflow: "
-      "`pop this 1` tries to access RAM at 65536.", 20, stderr), ==, 1);
+      "`pop this 1` tries to access RAM at 65536", 30, stderr), ==, 1);
   }
 
   return MUNIT_OK;
@@ -95,7 +95,7 @@ TEST(arithmetic_errors) {
     int res = exec(prog);
     del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(check_stream("addition overflow: 65535 + 1 = 65536 > 65535", 20, stderr), ==, 1);
+    assert_int(check_stream("addition overflow: 65535 + 1 = 65536 > 65535", 30, stderr), ==, 1);
   }
   {
     Inst inst_arr[] = {
@@ -107,7 +107,7 @@ TEST(arithmetic_errors) {
     int res = exec(prog);
     del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
-    assert_int(check_stream("subtraction underflow: 0 - 1 = -1 < 0", 20, stderr), ==, 1);
+    assert_int(check_stream("subtraction underflow: 0 - 1 = -1 < 0", 30, stderr), ==, 1);
   }
 
   return MUNIT_OK;

@@ -11,58 +11,69 @@
 
 #define BIT16_LIMIT 65535
 
-// Execution error return location.
+/* Execution error return location. */
 static jmp_buf exec_env;
 
-// Errors (some of them are used more than once so
-// they are defined here to avoid different spelling
-// of the same error or something similar).
+/* Errors (some of them are used more than once so
+ * they are defined here to avoid different spelling
+ * of the same error or something similar). */
 
-#define STACK_UNDERFLOW_ERROR {\
-  err("stack underflow"); \
-  longjmp(exec_env, EXEC_ERR); \
+#define STACK_UNDERFLOW_ERROR(pos) { \
+  perr((pos), "stack underflow");    \
+  longjmp(exec_env, EXEC_ERR);       \
 }
-#define POINTER_SEGMENT_ERROR(addr) \
-  errf("can't access pointer segment at `%lu` (max. index is 1).", (addr)); \
-  longjmp(exec_env, EXEC_ERR)
-#define ADDR_OVERFLOW_ERROR(inst, addr) { \
-  INST_STR(inst_str_buf, inst); \
-  errf("address overflow: `%s` tries to access RAM at %lu.", inst_str_buf, (addr)); \
-  longjmp(exec_env, EXEC_ERR); \
+#define POINTER_SEGMENT_ERROR(addr, pos) {        \
+  perrf((pos), "can't access pointer segment at " \
+       "`%lu` (max. index is 1)", (addr));        \
+  longjmp(exec_env, EXEC_ERR);                    \
 }
-#define STACK_ADDR_OVERFLOW_ERROR(inst, addr, max_addr) { \
-  INST_STR(inst_str_buf, inst); \
-  errf("stack address overflow: `%s` tries to access stack at %lu (limit is at %lu)", \
-    inst_str_buf, (addr), (max_addr)); \
-  longjmp(exec_env, EXEC_ERR); \
+#define ADDR_OVERFLOW_ERROR(instp, addr) { \
+  INST_STR(inst_str_buf, (instp));         \
+  perrf((instp)->pos, "address overflow: " \
+        "`%s` tries to access RAM at %lu", \
+        inst_str_buf, (addr));             \
+  longjmp(exec_env, EXEC_ERR);             \
 }
-#define SEG_OVERFLOW_ERROR(inst, offset) { \
-  INST_STR(inst_str_buf, inst); \
-  errf("address overflow in `%s`: segment has %lu entries", \
-    inst_str_buf, offset); \
-  longjmp(exec_env, EXEC_ERR); \
+#define STACK_ADDR_OVERFLOW_ERROR(instp, addr, max_addr) { \
+  INST_STR(inst_str_buf, (instp));                         \
+  perrf((instp)->pos, "stack address overflow: "           \
+        "`%s` tries to access stack "                      \
+       "at %lu (limit is at %lu)",                         \
+        inst_str_buf, (addr), (max_addr));                 \
+  longjmp(exec_env, EXEC_ERR);                             \
 }
-#define ADD_OVERFLOW_ERROR(x, y, sum) \
-  errf("addition overflow: %d + %d = %d > 65535", x, y, sum); \
-  longjmp(exec_env, EXEC_ERR);
-#define SUB_UNDERFLOW_ERROR(x, y) {\
-  int diff = (int) x - (int) y; \
-  errf("subtraction underflow: %d - %d = %d < 0", x, y, diff); \
-  longjmp(exec_env, EXEC_ERR); \
+#define SEG_OVERFLOW_ERROR(instp, offset) {                 \
+  INST_STR(inst_str_buf, (instp));                          \
+  perrf((instp)->pos, "address overflow in `%s`: "          \
+        "segment has %lu entries", inst_str_buf, (offset)); \
+  longjmp(exec_env, EXEC_ERR);                              \
 }
-#define CTRL_FLOW_ERROR(ident) { \
-  if (strcmp(ident, "Sys.init") == 0) { \
-    err("can't jump to function `Sys.init`.\n" SOLUTION_ARROW "Write it"); \
-  } else { \
-    errf("can't jump to %s", ident); \
-  } \
-  longjmp(exec_env, EXEC_ERR); \
+#define ADD_OVERFLOW_ERROR(x, y, sum, pos) {              \
+  perrf((pos), "addition overflow: %d + %d = %d > 65535", \
+    (x), (y), (sum));                                     \
+  longjmp(exec_env, EXEC_ERR);                            \
 }
-#define NARGS_ERROR(nargs, sp) { \
-  errf("given number of stack arguments (%d) is wrong." \
-    " There are only %lu elements on the stack!", \
-    (nargs), (sp)); \
-  longjmp(exec_env, EXEC_ERR); \
+#define SUB_UNDERFLOW_ERROR(x, y, pos) {                  \
+  int diff = (int) (x) - (int) (y);                       \
+  perrf((pos), "subtraction underflow: %d - %d = %d < 0", \
+    (x), (y), diff);                                      \
+  longjmp(exec_env, EXEC_ERR);                            \
+}
+#define CTRL_FLOW_ERROR(ident, pos) {                  \
+  if (strcmp((ident), "Sys.init") == 0) {              \
+    perr((pos), "can't jump to function `Sys.init`.\n" \
+      SOLUTION_ARROW "Write it");                      \
+  } else {                                             \
+    perrf((pos), "can't jump to %s",                   \
+      (ident));                                        \
+  }                                                    \
+  longjmp(exec_env, EXEC_ERR);                         \
+}
+#define NARGS_ERROR(nargs, sp, pos) {                           \
+  perrf((pos), "given number of stack arguments (%d) is wrong." \
+    " There are only %lu elements on the stack!",               \
+    (nargs), (sp));                                             \
+  longjmp(exec_env, EXEC_ERR);                                  \
 }
 
 void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
@@ -81,7 +92,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
         offset + stack->arg < stack->sp
       ) {
         if (!spop(stack, &stack->ops[offset + stack->arg]))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       } else {
         if (offset >= stack->arg_len) {
           SEG_OVERFLOW_ERROR(&inst, stack->arg_len);
@@ -96,7 +107,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
         offset + stack->lcl < stack->sp
       ) {
         if (!spop(stack, &stack->ops[offset + stack->lcl]))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       } else {
         if (offset >= stack->lcl_len) {
           SEG_OVERFLOW_ERROR(&inst, stack->lcl_len);
@@ -108,7 +119,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
     case STAT:
       if (offset < MEM_STAT_SIZE) {
         if (!spop(stack, &mem->_static[offset]))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       } else {
         SEG_OVERFLOW_ERROR(&inst, MEM_STAT_SIZE);
       }
@@ -117,7 +128,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
         // `pop`ping to constant deletes the value.
         Word val;
         if (!spop(stack, &val))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       }
       break;
     case THIS:
@@ -125,7 +136,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
         // If we land here, then `offset + heap->_this` fits
         // a `uint16_t`.
         Word val;
-        if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR;
+        if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR(inst.pos);
         heap_set(*heap, (Addr)(offset + heap->_this), val);
       } else {
         ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);
@@ -134,7 +145,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
     case THAT:
       if (offset + heap->that <= MEM_HEAP_SIZE) {
         Word val;
-        if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR;
+        if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR(inst.pos);
         heap_set(*heap, (Addr)(offset + heap->that), val);
       } else {
         ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);
@@ -143,18 +154,18 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
     case PTR:
       if (offset == 0) {
         if (!spop(stack, (Word*) &heap->_this))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       } else if (offset == 1) {
         if (!spop(stack, (Word*) &heap->that))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       } else {
-        POINTER_SEGMENT_ERROR(offset);
+        POINTER_SEGMENT_ERROR(offset, inst.pos);
       }
       return;
     case TMP:
       if (offset < MEM_TEMP_SIZE) {
         if (!spop(stack, &mem->tmp[offset]))
-          STACK_UNDERFLOW_ERROR;
+          STACK_UNDERFLOW_ERROR(inst.pos);
       } else {
         SEG_OVERFLOW_ERROR(&inst, MEM_TEMP_SIZE)
       }
@@ -235,7 +246,7 @@ void exec_push(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
         assert(heap->that <= MEM_HEAP_SIZE);
         spush(stack, (Word) heap->that);
       } else {
-        POINTER_SEGMENT_ERROR(offset);
+        POINTER_SEGMENT_ERROR(offset, inst.pos);
       }
       return;
     case TMP:
@@ -253,15 +264,15 @@ void exec_push(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
 // on itermediate results.
 typedef uint32_t Wordbuf;
 
-static inline void exec_add(Stack* stack) {
+static inline void exec_add(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Wordbuf sum = (Wordbuf) x + (Wordbuf) y;
 
   if (sum <= BIT16_LIMIT) {
@@ -271,72 +282,72 @@ static inline void exec_add(Stack* stack) {
     // this resets the stack to the state
     // before attempting the add.
     stack->sp += 2;
-    ADD_OVERFLOW_ERROR(x, y, sum);
+    ADD_OVERFLOW_ERROR(x, y, sum, pos);
   }
 }
 
-static inline void exec_sub(Stack* stack) {
+static inline void exec_sub(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   if (x >= y) {
     spush(stack, x - y);
   } else {
     stack->sp += 2;  // Restore `x` and `y`.
-    SUB_UNDERFLOW_ERROR(x, y);
+    SUB_UNDERFLOW_ERROR(x, y, pos);
   }
 }
 
-static inline void exec_neg(Stack* stack) {
+static inline void exec_neg(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   // Two's complement negation.
   y = ~y;
   y += 1;
   spush(stack, y);
 }
 
-static inline void exec_and(Stack* stack) {
+static inline void exec_and(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   spush(stack, x & y);
 }
 
-static inline void exec_or(Stack* stack) {
+static inline void exec_or(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   spush(stack, x | y);
 }
 
-static inline void exec_not(Stack* stack) {
+static inline void exec_not(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   spush(stack, ~y);
 }
 
@@ -349,41 +360,41 @@ static inline void exec_not(Stack* stack) {
 # define TRUE 0xFFFF
 # define FALSE 0
 
-static inline void exec_eq(Stack* stack) {
+static inline void exec_eq(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   spush(stack, x == y ? TRUE : FALSE);
 }
 
-static inline void exec_lt(Stack* stack) {
+static inline void exec_lt(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   spush(stack, x < y ? TRUE : FALSE);
 }
 
-static inline void exec_gt(Stack* stack) {
+static inline void exec_gt(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word y;
   if (!spop(stack, &y))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
   Word x;
   if (!spop(stack, &x))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   spush(stack, x > y ? TRUE : FALSE);
 }
@@ -429,7 +440,7 @@ static int jump_to(struct Program* prog, struct SymKey key, struct SymVal* val) 
   }
 }
 
-static inline void exec_goto(struct Program* prog) {
+static inline void exec_goto(struct Program* prog, Pos pos) {
   assert(prog != NULL);
 
   struct SymVal val;
@@ -438,16 +449,16 @@ static inline void exec_goto(struct Program* prog) {
     SBT_LABEL
   );
   if (!jump_to(prog, key, &val))
-    CTRL_FLOW_ERROR(key.ident);
+    CTRL_FLOW_ERROR(key.ident, pos);
   /* Else everything went well. */
 }
 
-static inline void exec_if_goto(struct Program* prog) {
+static inline void exec_if_goto(struct Program* prog, Pos pos) {
   assert(prog != NULL);
 
   Word val;
   if (!spop(&prog->stack, &val))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   /* Jump if topmost value is true. */
 
@@ -461,12 +472,12 @@ static inline void exec_if_goto(struct Program* prog) {
     if (!jump_to(prog, key, &val)) {
       /* Restore poping `val` off the stack. */
       prog->stack.sp ++;
-      CTRL_FLOW_ERROR(key.ident);
+      CTRL_FLOW_ERROR(key.ident, pos);
     }
   }
 }
 
-static inline void exec_call(struct Program* prog) {
+static inline void exec_call(struct Program* prog, Pos pos) {
   assert(prog != NULL);
 
   const char* ident = active_file(prog).insts->cell[active_file(prog).ei].ident;
@@ -478,12 +489,12 @@ static inline void exec_call(struct Program* prog) {
   Addr ret_fi = prog->fi;
 
   if (nargs > stack->sp)
-    NARGS_ERROR(nargs, stack->sp);
+    NARGS_ERROR(nargs, stack->sp, pos);
 
   struct SymVal val;
   struct SymKey key = mk_key(ident, SBT_FUNC);
   if (!jump_to(prog, key, &val))
-    CTRL_FLOW_ERROR(ident);
+    CTRL_FLOW_ERROR(ident, pos);
 
   // Push return execution index on the stack.
   spush(stack, (Word) ret_ei);
@@ -520,7 +531,7 @@ static inline void exec_call(struct Program* prog) {
   active_file(prog).ei = val.inst_addr - 1;
 }
 
-void exec_ret(struct Program* prog) {
+void exec_ret(struct Program* prog, Pos pos) {
   assert(prog != NULL);
 
   Stack* stack = &prog->stack;
@@ -539,7 +550,7 @@ void exec_ret(struct Program* prog) {
   // pushed on the stack by the caller. This is
   // where the caller will expect the return value.
   if (!spop(stack, &stack->ops[stack->arg]))
-    STACK_UNDERFLOW_ERROR;
+    STACK_UNDERFLOW_ERROR(pos);
 
   stack->sp = stack->arg + 1;
   // Restore the rest of the registers which
@@ -589,33 +600,46 @@ int exec(struct Program* prog) {
         );
         break;
       case ADD:
-        exec_add(&prog->stack); break;
+        exec_add(&prog->stack, active_inst(prog).pos);
+        break;
       case SUB:
-        exec_sub(&prog->stack); break;
+        exec_sub(&prog->stack, active_inst(prog).pos);
+        break;
       case NEG:
-        exec_neg(&prog->stack); break;
+        exec_neg(&prog->stack, active_inst(prog).pos);
+        break;
       case AND:
-        exec_and(&prog->stack); break;
+        exec_and(&prog->stack, active_inst(prog).pos);
+        break;
       case OR:
-        exec_or(&prog->stack); break;
+        exec_or(&prog->stack, active_inst(prog).pos);
+        break;
       case NOT:
-        exec_not(&prog->stack); break;
+        exec_not(&prog->stack, active_inst(prog).pos);
+        break;
       case EQ:
-        exec_eq(&prog->stack); break;
+        exec_eq(&prog->stack, active_inst(prog).pos);
+        break;
       case LT:
-        exec_lt(&prog->stack); break;
+        exec_lt(&prog->stack, active_inst(prog).pos);
+        break;
       case GT:
-        exec_gt(&prog->stack); break;
+        exec_gt(&prog->stack, active_inst(prog).pos);
+        break;
       case GOTO:
-        exec_goto(prog); break;
+        exec_goto(prog, active_inst(prog).pos);
+        break;
       case IF_GOTO:
-        exec_if_goto(prog); break;
+        exec_if_goto(prog, active_inst(prog).pos);
+        break;
       case CALL:
-        exec_call(prog); break;
+        exec_call(prog, active_inst(prog).pos);
+        break;
       case RET:
-        exec_ret(prog); break;
+        exec_ret(prog, active_inst(prog).pos);
+        break;
       default: {
-        INST_STR(str, &active_file(prog).insts->cell[active_file(prog).ei]);
+        INST_STR(str, &active_inst(prog));
         errf("invalid inststruction `%s`; programmer mistake", str);
         return EXEC_ERR;
       }
