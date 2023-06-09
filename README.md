@@ -18,9 +18,7 @@ This computes the 16th element in the Fibonacci sequence (987).
 
 ## To Do
 
-- [ ] Add syntax highlighting to Helix editor
-
-- [ ] Add a single header
+- [ ] System API
 
 - [x] Respect hidden stack content when popping
 
@@ -31,8 +29,3 @@ This computes the 16th element in the Fibonacci sequence (987).
 - [x] Add function, call and return (finishes up language spec)
 
 - [x] Combine multiple files and manage their static data.
-
-### REPL (abandoned)
-
-- [ ] Remove previous return values from REPL
-      so that the instructions become more readable.
