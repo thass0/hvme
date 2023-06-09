@@ -42,7 +42,11 @@ int spop(Stack* stack, Word* val) {
   assert(stack != NULL);
   assert(val != NULL);
 
-  if (stack->sp > 0) {
+  /* Underflowing into the caller's stack is forbidden.
+   * This part of the stack starts at
+   * `stack->lcl + stack->lcl_len`. */
+
+  if (stack->sp > (stack->lcl + stack->lcl_len)) {
     stack->sp --;
     if (stack->sp < stack->len - STACK_BLOCK_SIZE) {
       stack->len -= STACK_BLOCK_SIZE;
