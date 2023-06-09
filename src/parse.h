@@ -67,12 +67,10 @@ typedef struct {
 } Insts;
 
 // Initialize a new `Insts` instance.
-Insts* new_insts(const char* filename);
+Insts new_insts(const char* filename);
 
 // Delete an `Insts` instance.
-void del_insts(Insts* insts);
-
-void cpy_insts(Insts* dest, Insts* src);
+void del_insts(Insts insts);
 
 # ifndef INST_STR_BUF
 // Size of `char` buf to pass to `inst_str`.
@@ -87,7 +85,7 @@ void inst_str(const Inst* i, char* str);
 // Macro to handle the fixed-size string
 // buffer used to stringify an instruction.
 // This macro should be the only way
-// `item_str` is called.
+// `token_str` is called.
 # define INST_STR(id, inst) \
   char id[INST_STR_BUF]; \
   inst_str(inst, id);
@@ -100,8 +98,10 @@ void inst_str(const Inst* i, char* str);
 // Last element in instruction array.
 #define NULL_INST (Inst) { .code=IC_NONE }
 
-// Parse the given array of items (tokens with
-// optional data). Returns `NULL` on failure.
-Insts* parse(const Items* items, SymbolTable* st);
+#define PARSE_ERR 0
+#define PARSE_OK 1
+
+// Parse the given array of token. Returns `NULL` on failure.
+int parse(const Tokens* tokens, Insts* insts, SymbolTable* st);
 
 #endif  // _PARSE_H_

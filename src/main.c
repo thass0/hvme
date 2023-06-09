@@ -10,7 +10,7 @@ int main(int argc, const char* argv[]) {
     err("Can't execute 0 files!");
     return 1;
   } else {
-    struct Program* prog = make_prog(argc - 1, argv + 1);
+    Program* prog = make_prog(argc - 1, argv + 1);
     if (prog == NULL)
       return 1;
 

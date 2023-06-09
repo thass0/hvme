@@ -8,31 +8,31 @@
 
 #include "scan.h"
 
-enum SymKeyType {
+typedef enum {
     SBT_UNUSED = 0,
     SBT_FUNC,
     SBT_LABEL,
-};
+} SymKeyType;
 
-struct SymKey {
-  enum SymKeyType type;
+typedef struct {
+  SymKeyType type;
   char ident[MAX_IDENT_LEN + 1];
-};
+} SymKey;
 
-struct SymVal {
+typedef struct {
   // Instruction address in `Insts`.
   size_t inst_addr;
   uint16_t nlocals;  // Used only in functions.
-};
+} SymVal;
 
-struct Symbol {
-  struct SymKey key;
-  struct SymVal val;
-};
+typedef struct {
+  SymKey key;
+  SymVal val;
+} Symbol;
 
 // Open-addressed symbol table.
 typedef struct {
-  struct Symbol* cell;
+  Symbol* cell;
   size_t len;  // Number of entries in `cell`.
   size_t used;  // Number of used entries.
   size_t num_inst;  // Number of next instruction.
@@ -56,9 +56,9 @@ SymbolTable new_st(void);
 void del_st(SymbolTable st);
 
 // Instantiate keys and values.
-struct SymKey mk_key(const char* ident, enum SymKeyType type);
-struct SymVal mk_lbval(size_t inst_addr);
-struct SymVal mk_fnval(size_t inst_addr, uint16_t nlocals);
+SymKey mk_key(const char* ident, SymKeyType type);
+SymVal mk_lbval(size_t inst_addr);
+SymVal mk_fnval(size_t inst_addr, uint16_t nlocals);
 
 typedef enum {
   INRES_EXISTS = 0,  // The given symbol already exists with different data.
@@ -67,8 +67,8 @@ typedef enum {
 
 InsertResult insert_st(
   SymbolTable* st,
-  struct SymKey key,
-  struct SymVal val
+  SymKey key,
+  SymVal val
 );
 
 typedef enum {
@@ -78,6 +78,6 @@ typedef enum {
 
 // `val` is set to the retrieved info if `GTRES_OK` is returned.
 // Otherwise `val` isn't changed.
-GetResult get_st(SymbolTable st, const struct SymKey* key, struct SymVal* val);
+GetResult get_st(SymbolTable st, const SymKey* key, SymVal* val);
 
 # endif  // _ST_H_

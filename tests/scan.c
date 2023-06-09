@@ -6,17 +6,20 @@
 #include "../src/scan.h"
 #include "utils.h"
 
-#define TEST_SCAN_TOKEN(name, lit, token) \
-TEST(name) { \
-  Items* items = new_items(NULL); \
-  char* blk = lit; \
-  ssize_t res = scan(items, blk, strlen(blk)); \
-  assert_int(res, ==, 0); \
-  assert_int(items->cell[0].t, ==, token); \
-  ITEM_STR(str, &items->cell[0]); \
-  assert_string_equal(str, blk); \
-  del_items(items); \
-  return MUNIT_OK; \
+/* Internal scan function */
+extern ssize_t scan_blk(Tokens* tokens, const char* blk, size_t len);
+
+#define TEST_SCAN_TOKEN(name, lit, token)           \
+TEST(name) {                                        \
+  Tokens tokens = new_tokens(NULL);                    \
+  char* blk = lit;                                  \
+  ssize_t res = scan_blk(&tokens, blk, strlen(blk)); \
+  assert_int(res, ==, 0);                           \
+  assert_int(tokens.cell[0].t, ==, token);           \
+  TOKEN_STR(str, &tokens.cell[0]);                    \
+  assert_string_equal(str, blk);                    \
+  del_tokens(tokens);                                 \
+  return MUNIT_OK;                                  \
 }
 
 TEST_SCAN_TOKEN(scan_push, "push", TK_PUSH)
@@ -49,14 +52,14 @@ TEST(scan_each_num) {
   // Accept all 65536 valid numbers  (0 - 65535).
   char blk[7];
   for (uint16_t i = 0; i < 65535; i++) {
-    Items* items = new_items(NULL);
+    Tokens tokens = new_tokens(NULL);
     strncpy(blk, "      ", 7);  // Reset to whitespace.
     snprintf(blk, 7, "%d ", i);  // Write the current number to the string.
-    ssize_t res = scan(items, blk, strlen(blk));
+    ssize_t res = scan_blk(&tokens, blk, strlen(blk));
     assert_int(res, ==, 0);
-    assert_int(items->cell[0].t, ==, TK_UINT);
-    assert_int(items->cell[0].uilit, ==, i);
-    del_items(items);
+    assert_int(tokens.cell[0].t, ==, TK_UINT);
+    assert_int(tokens.cell[0].uilit, ==, i);
+    del_tokens(tokens);
   }
 
   return MUNIT_OK;
@@ -66,24 +69,24 @@ TEST(truncate_idents) {
   //        This 25th character should be truncated.
   //                                               |
   char* label_blk = "label abstractachievedaccuracy1\n";
-  Items* items = new_items(NULL);
-  ssize_t res =  scan(items, label_blk, strlen(label_blk));
+  Tokens tokens = new_tokens(NULL);
+  ssize_t res =  scan_blk(&tokens, label_blk, strlen(label_blk));
   assert_int(res, ==, 0);  // Input should still be accepted.
-  assert_string_equal(items->cell[1].ident, "abstractachievedaccuracy");
+  assert_string_equal(tokens.cell[1].ident, "abstractachievedaccuracy");
   assert_int(check_stream("`abstractachievedaccuracy1` is too long to be an identifier", 20, stderr), ==, 1);
-  del_items(items);
+  del_tokens(tokens);
 
   return MUNIT_OK;
 }
 
 TEST(eat_ws) {
-  Items* items = new_items(NULL);
+  Tokens tokens = new_tokens(NULL);
   char* blk = " \t\n push \t \n pop  \n";
-  ssize_t res = scan(items, blk, strlen(blk));
+  ssize_t res = scan_blk(&tokens, blk, strlen(blk));
   assert_int(res, ==, 0);
-  assert_int(items->cell[0].t, ==, TK_PUSH);
-  assert_int(items->cell[1].t, ==, TK_POP);
-  del_items(items);
+  assert_int(tokens.cell[0].t, ==, TK_PUSH);
+  assert_int(tokens.cell[1].t, ==, TK_POP);
+  del_tokens(tokens);
   return MUNIT_OK;
 }
 
@@ -95,81 +98,85 @@ TEST(eat_comments) {
     "// More comments ...\n"
     "push constant 2 // <- More code.\n";
 
-  Items* items = new_items(NULL);
-  ssize_t res = scan(items, blk, strlen(blk));
+  Tokens tokens = new_tokens(NULL);
+  ssize_t res = scan_blk(&tokens, blk, strlen(blk));
   assert_int(res, ==, 0);
-  assert_int(items->cell[0].t, ==, TK_PUSH);
-  assert_int(items->cell[1].t, ==, TK_CONST);
-  assert_int(items->cell[2].t, ==, TK_UINT);
-  assert_int(items->cell[3].t, ==, TK_PUSH);
-  assert_int(items->cell[4].t, ==, TK_CONST);
-  assert_int(items->cell[5].t, ==, TK_UINT);
-  del_items(items);
+  assert_int(tokens.cell[0].t, ==, TK_PUSH);
+  assert_int(tokens.cell[1].t, ==, TK_CONST);
+  assert_int(tokens.cell[2].t, ==, TK_UINT);
+  assert_int(tokens.cell[3].t, ==, TK_PUSH);
+  assert_int(tokens.cell[4].t, ==, TK_CONST);
+  assert_int(tokens.cell[5].t, ==, TK_UINT);
+  del_tokens(tokens);
 
   return MUNIT_OK;
 }
 
 TEST(find_num_remaining) {
-  Items* items = new_items(NULL);
+  Tokens tokens = new_tokens(NULL);
   // `scan` should return `2` to signal that the last
   // two characters need to be copied to the start of the next block.
   char* blk = "push\npop\npop\npu";
-  ssize_t res = scan(items, blk, strlen(blk));
+  ssize_t res = scan_blk(&tokens, blk, strlen(blk));
   assert_int(res, ==, 2);
-  assert_int(items->cell[0].t, ==, TK_PUSH);
-  assert_int(items->cell[1].t, ==, TK_POP);
-  assert_int(items->cell[2].t, ==, TK_POP);
-  del_items(items);
+  assert_int(tokens.cell[0].t, ==, TK_PUSH);
+  assert_int(tokens.cell[1].t, ==, TK_POP);
+  assert_int(tokens.cell[2].t, ==, TK_POP);
+  del_tokens(tokens);
 
   return MUNIT_OK;
 }
 
 TEST(scan_along_block_borders) {
   assert_int(SCAN_BLOCK_SIZE, ==, MAX_TOKEN_LEN);
-  {  // Scanning normal items over borders works.
+  {  // Scanning normal tokens over borders works.
     char fn[] = "/tmp/XXXXXX";
     // Start of next block (`TK_SCAN_BLOCK_SIZE` is 8 for unit tests).
     //                           |
     setup_tmp(fn, "pop  \npush\npush\npop\n");
-    Items* items = scan_blocks(fn);
-    assert_ptr_not_null(items);
-    assert_int(items->cell[0].t, ==, TK_POP);
-    assert_int(items->cell[1].t, ==, TK_PUSH);
-    assert_int(items->cell[2].t, ==, TK_PUSH);
-    del_items(items);
+    Tokens tokens = new_tokens(fn);
+    int scan_res = scan(&tokens);
+    assert_int(scan_res, ==, SCAN_OK);
+    assert_int(tokens.cell[0].t, ==, TK_POP);
+    assert_int(tokens.cell[1].t, ==, TK_PUSH);
+    assert_int(tokens.cell[2].t, ==, TK_PUSH);
+    del_tokens(tokens);
   }
   {  // Newline warning aren't emitted if
      // the content ends with a newline.
     char fn[] = "/tmp/XXXXXX";
     setup_tmp(fn, "pop\n");
-    Items* items = scan_blocks(fn);
-    assert_ptr_not_null(items);
-    del_items(items);
+    Tokens tokens = new_tokens(fn);
+    int scan_res = scan(&tokens);
+    assert_int(scan_res, ==, SCAN_OK);
+    del_tokens(tokens);
     // Check that `stderr` doesn't contain a warning.
     assert_int(check_stream("Warn:", 5, stderr), ==, 0);
   }
   {  // Scanning numbers over borders works.
     char fn[] = "/tmp/XXXXXX";
     setup_tmp(fn, "pop  \n48907\npush");
-    Items* items = scan_blocks(fn);
-    assert_ptr_not_null(items);
-    assert_int(items->cell[0].t, ==, TK_POP);
-    assert_int(items->cell[1].t, ==, TK_UINT);
-    assert_int(items->cell[1].uilit,  ==, 48907);
-    assert_int(items->cell[2].t, ==, TK_PUSH);
-    del_items(items);
+    Tokens tokens = new_tokens(fn);
+    int scan_res = scan(&tokens);
+    assert_int(scan_res, ==, SCAN_OK);
+    assert_int(tokens.cell[0].t, ==, TK_POP);
+    assert_int(tokens.cell[1].t, ==, TK_UINT);
+    assert_int(tokens.cell[1].uilit,  ==, 48907);
+    assert_int(tokens.cell[2].t, ==, TK_PUSH);
+    del_tokens(tokens);
   }
   // Numbers without whitespace at end works.
   {
     char fn[] = "/tmp/XXXXXX";
     setup_tmp(fn, "pop  \npush\n48907");
-    Items* items = scan_blocks(fn);
-    assert_ptr_not_null(items);
-    assert_int(items->cell[0].t, ==, TK_POP);
-    assert_int(items->cell[1].t, ==, TK_PUSH);
-    assert_int(items->cell[2].t, ==, TK_UINT);
-    assert_int(items->cell[2].uilit,  ==, 48907);
-    del_items(items);
+    Tokens tokens = new_tokens(fn);
+    int scan_res = scan(&tokens);
+    assert_int(scan_res, ==, SCAN_OK);
+    assert_int(tokens.cell[0].t, ==, TK_POP);
+    assert_int(tokens.cell[1].t, ==, TK_PUSH);
+    assert_int(tokens.cell[2].t, ==, TK_UINT);
+    assert_int(tokens.cell[2].uilit,  ==, 48907);
+    del_tokens(tokens);
   }
   {
     // This test case also check the behaviour of the
@@ -179,13 +186,14 @@ TEST(scan_along_block_borders) {
     // scanner should still exit successfully.
     char fn[] = "/tmp/XXXXXX";
     setup_tmp(fn, "pop  \npush\n48");
-    Items* items = scan_blocks(fn);
-    assert_ptr_not_null(items);
-    assert_int(items->cell[0].t, ==, TK_POP);
-    assert_int(items->cell[1].t, ==, TK_PUSH);
-    assert_int(items->cell[2].t, ==, TK_UINT);
-    assert_int(items->cell[2].uilit,  ==, 48);
-    del_items(items);
+    Tokens tokens = new_tokens(fn);
+    int scan_res = scan(&tokens);
+    assert_int(scan_res, ==, SCAN_OK);
+    assert_int(tokens.cell[0].t, ==, TK_POP);
+    assert_int(tokens.cell[1].t, ==, TK_PUSH);
+    assert_int(tokens.cell[2].t, ==, TK_UINT);
+    assert_int(tokens.cell[2].uilit,  ==, 48);
+    del_tokens(tokens);
   }
 
   return MUNIT_OK;
@@ -200,55 +208,56 @@ TEST(eat_comments_with_blocks) {
     "// More comments ...\n"
     "push constant 2 // <- More code.\n");
 
-  Items* items = scan_blocks(fn);
-  assert_ptr_not_null(items);
-  assert_int(items->cell[0].t, ==, TK_PUSH);
-  assert_int(items->cell[1].t, ==, TK_CONST);
-  assert_int(items->cell[2].t, ==, TK_UINT);
-  assert_int(items->cell[3].t, ==, TK_PUSH);
-  assert_int(items->cell[4].t, ==, TK_CONST);
-  assert_int(items->cell[5].t, ==, TK_UINT);
-  del_items(items);
+  Tokens tokens = new_tokens(fn);
+  int scan_res = scan(&tokens);
+  assert_int(scan_res, ==, SCAN_OK);
+  assert_int(tokens.cell[0].t, ==, TK_PUSH);
+  assert_int(tokens.cell[1].t, ==, TK_CONST);
+  assert_int(tokens.cell[2].t, ==, TK_UINT);
+  assert_int(tokens.cell[3].t, ==, TK_PUSH);
+  assert_int(tokens.cell[4].t, ==, TK_CONST);
+  assert_int(tokens.cell[5].t, ==, TK_UINT);
+  del_tokens(tokens);
 
   return MUNIT_OK;
 }
 
-TEST(realloc_items_array) {
+TEST(realloc_tokens_array) {
   {  // Reallocate array of insufficient size.
-    Items* items = new_items(NULL);
+    Tokens tokens = new_tokens(NULL);
     // Shrink the cell size.
-    items->len = 2;
-    items->cell = (Item*) realloc (items->cell, items->len * sizeof(Item));
-    assert(items->cell != NULL);
+    tokens.len = 2;
+    tokens.cell = (Token*) realloc (tokens.cell, tokens.len * sizeof(Token));
+    assert(tokens.cell != NULL);
 
     char* blk = "pop\npop\npop\npop";
-    ssize_t res = scan(items, blk, strlen(blk));
+    ssize_t res = scan_blk(&tokens, blk, strlen(blk));
     assert_int(res, ==, 0);
     // `ididx` is four instead of three (which would be
     // the expected zero-based index) because it already
     // points to the next index.
-    assert_int(items->idx, ==, 4);
-    assert_int(items->len, ==, ITEM_BLOCK_SIZE + 2);
-    for (size_t i = 0; i < items->idx; i++) {
-      assert_int(items->cell[i].t, ==, TK_POP);
+    assert_int(tokens.idx, ==, 4);
+    assert_int(tokens.len, ==, TOKEN_BLOCK_SIZE + 2);
+    for (size_t i = 0; i < tokens.idx; i++) {
+      assert_int(tokens.cell[i].t, ==, TK_POP);
     }
-    del_items(items);
+    del_tokens(tokens);
   }
   {  // Reallocate empty array
-    Items* items = new_items(NULL);
-    items->len = 0;
-    items->cell = (Item*) realloc (items->cell, items->len * sizeof(Item));
-    assert(items->cell == NULL);  // `NULL` since array is empty.
+    Tokens tokens = new_tokens(NULL);
+    tokens.len = 0;
+    tokens.cell = (Token*) realloc (tokens.cell, tokens.len * sizeof(Token));
+    assert(tokens.cell == NULL);  // `NULL` since array is empty.
 
     char* blk = "pop\npop\npop\npop";
-    ssize_t res = scan(items, blk, strlen(blk));
+    ssize_t res = scan_blk(&tokens, blk, strlen(blk));
     assert_int(res, ==, 0);
-    assert_int(items->idx, ==, 4);
-    assert_int(items->len, ==, ITEM_BLOCK_SIZE);
-    for (size_t i = 0; i < items->idx; i++) {
-      assert_int(items->cell[i].t, ==, TK_POP);
+    assert_int(tokens.idx, ==, 4);
+    assert_int(tokens.len, ==, TOKEN_BLOCK_SIZE);
+    for (size_t i = 0; i < tokens.idx; i++) {
+      assert_int(tokens.cell[i].t, ==, TK_POP);
     }
-    del_items(items);
+    del_tokens(tokens);
   }
 
   return MUNIT_OK;
@@ -287,6 +296,6 @@ MunitTest scan_tests[] = {
   REG_TEST(find_num_remaining),
   REG_TEST(scan_along_block_borders),
   REG_TEST(eat_comments_with_blocks),
-  REG_TEST(realloc_items_array),
+  REG_TEST(realloc_tokens_array),
   { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };

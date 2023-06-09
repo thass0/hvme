@@ -15,8 +15,8 @@ TEST(st_io_works) {
   for (int j = 0; functions[j] != NULL; j++)
     insert_st(&s, mk_key(functions[4 - j], SBT_FUNC), mk_lbval(j));
   
-  struct SymVal val;
-  struct SymKey key;
+  SymVal val;
+  SymKey key;
   for (int i = 0; labels[i] != NULL; i++) {
     key = mk_key(labels[i], SBT_LABEL);
     assert_int(get_st(s, &key, &val), ==, GTRES_OK);
@@ -39,10 +39,10 @@ TEST(data_collisions_are_rejected) {
   size_t num_inst_a =  324;  // Any number.
   size_t num_inst_b =  7806;  // Any number not equal to `num_inst_a`.
 
-  struct SymKey key = mk_key("someIdent", SBT_LABEL);
+  SymKey key = mk_key("someIdent", SBT_LABEL);
   assert_int(insert_st(&s, key, mk_lbval(num_inst_a)), ==, INRES_OK);
   assert_int(insert_st(&s, key, mk_lbval(num_inst_b)), ==, INRES_EXISTS);
-  struct SymVal val;
+  SymVal val;
   assert_int(get_st(s, &key, &val), ==, GTRES_OK);
   assert_int(val.inst_addr, ==, num_inst_a);
 

@@ -13,7 +13,6 @@ typedef uint16_t Word;
 #define MEM_STAT_SIZE 0x100lu
 #define MEM_TEMP_SIZE 0x10lu
 
-
 #ifndef STACK_BLOCK_SIZE
 #  ifdef UNIT_TESTS
 #    define STACK_BLOCK_SIZE 2
@@ -72,31 +71,31 @@ void heap_set(Heap h, Addr addr, Word val);
 // Delete memory allocated by the given heap.
 void del_heap(Heap h);
 
-struct Memory {
+typedef struct {
   Word* _static;
   Word* tmp;
-};
+} Memory;
 
-struct File {
+typedef struct {
   char* filename;  /* guess what. */
   SymbolTable st;  /* file's symbols. */
-  Insts* insts;  /* files's instructions. */
-  struct Memory mem;  /* file's local memory segments (static and temp). */
+  Insts insts;  /* files's instructions. */
+  Memory mem;  /* file's local memory segments (static and temp). */
   unsigned int ei;  /* execution index into  `insts`. */
-};
+} File;
 
-struct Program {
-  struct File* files;  /* files for all sources. */
+typedef struct {
+  File* files;  /* files for all sources. */
   unsigned int nfiles;  /* number of files in `files`. */
   unsigned int fi;  /* file index into `files`. */
   Heap heap;  /* Program heap memory. */
   Stack stack;  /* Program stack memory. */
-};
+} Program;
 
 /* Assemable the source code in all the given
  * files into an executable program. */
-struct Program* make_prog(unsigned int nfn, const char** fn);
+Program* make_prog(unsigned int nfn, const char** fn);
 
-void del_prog(struct Program* prog);
+void del_prog(Program* prog);
 
 #endif // _PROG_H_

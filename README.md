@@ -15,11 +15,14 @@ make run args=examples/fibonacci.vm
 
 This computes the 16th element in the Fibonacci sequence (987).
 
+
 ## To Do
 
-- [ ] Respect hidden stack content when popping
-
 - [ ] Add syntax highlighting to Helix editor
+
+- [ ] Add a single header
+
+- [x] Respect hidden stack content when popping
 
 - [x] Improve identifier messaging.
 

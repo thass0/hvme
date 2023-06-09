@@ -1,5 +1,6 @@
 #include "parse.h"
-#include "utils.h"
+#include "err.h"
+#include "warn.h"
 #include "st.h"
 
 #include <stdlib.h>
@@ -7,32 +8,29 @@
 #include <limits.h>
 #include <assert.h>
 
-Insts* new_insts(const char* filename) {
-  Insts* insts = (Insts*) malloc (sizeof(Insts));
-  assert(insts != NULL);
-  insts->idx = 0;
-  insts->len = INST_BLOCK_SIZE;
+Insts new_insts(const char* filename) {
+  Insts insts = {
+    .idx=0,
+    .len=INST_BLOCK_SIZE,
+  };
 
   if (filename != NULL) {
-    insts->filename = (char*) calloc (strlen(filename) + 1, sizeof(char));
+    insts.filename = (char*) calloc (strlen(filename) + 1, sizeof(char));
     assert(filename != NULL);
-    strcpy(insts->filename, filename);
+    strcpy(insts.filename, filename);
   } else {
-    insts->filename = NULL;
+    insts.filename = NULL;
   }
 
-  insts->cell = (Inst*) calloc (insts->len, sizeof(Inst));
-  assert(insts->cell != NULL);
+  insts.cell = (Inst*) calloc (insts.len, sizeof(Inst));
+  assert(insts.cell != NULL);
 
   return insts;
 }
 
-void del_insts(Insts* insts) {
-  if (insts != NULL) {
-    free(insts->cell);
-    free(insts->filename);
-    free(insts);
-  }
+void del_insts(Insts insts) {
+  free(insts.cell);
+  free(insts.filename);
 }
 
 void cpy_insts(Insts* dest, Insts* src) {
@@ -77,49 +75,49 @@ void inst_str(const Inst* i, char* str) {
   }
 }
 
-// Internal item stream interface.
+// Internal token stream interface.
 typedef struct {
-  const Item* items;
+  const Token* tokens;
   size_t idx;
   size_t len;
-} ItemStream;
+} TokenStream;
 
 
-const static Item none_item = (Item) {
+const static Token none_token = (Token) {
   .t=TK_NONE,
   .uilit=0,
   .pos={.ln=0, .cl=0},
 };
 
-// Return the current item and go to the next.
-const Item* its_next(ItemStream* its) {
+// Return the current token and go to the next.
+const Token* its_next(TokenStream* its) {
   assert(its != NULL);
   
   return its->idx < its->len
     // Return the current entry and go to the next.
-    ? &its->items[its->idx ++]
+    ? &its->tokens[its->idx ++]
     // Return the none entry, signaling that `idx`
     // has reached the end of the stream.
-    : &none_item;
+    : &none_token;
 }
 
-// Return the current item.
-const Item* its_lh(const ItemStream* its) {
+// Return the current token.
+const Token* its_lh(const TokenStream* its) {
   assert(its != NULL);
 
   return its->idx < its->len
-    ? &its->items[its->idx]
-    : &none_item;
+    ? &its->tokens[its->idx]
+    : &none_token;
 }
 
 // Create a slice into the given stream which starts
 // at the left offset of `idx` `ol` and ends at the
 // right offset of `idx` `or`.
-ItemStream its_slice(ItemStream* its, size_t ol, size_t or) {
+TokenStream its_slice(TokenStream* its, size_t ol, size_t or) {
   assert(its != NULL);
 
-  return (ItemStream) {
-    .items=its->items,
+  return (TokenStream) {
+    .tokens=its->tokens,
     // `idx` is `idx - offset left` if
     // this doesn't go below zero.
     .idx = ol >= its->idx
@@ -133,31 +131,31 @@ ItemStream its_slice(ItemStream* its, size_t ol, size_t or) {
   };
 }
 
-void print_expect3_err(ItemStream its, const char* expectation, const char* filename) {
+void print_expect3_err(TokenStream its, const char* expectation, const char* filename) {
   assert(expectation != NULL);
 
   // `calloc` will indirectly add the null-terminator
   // to both `spacer` and `pointer`.
-  ITEM_STR(first, its_next(&its));
+  TOKEN_STR(first, its_next(&its));
   char* first_spacer = (char*) calloc (strlen(first) + 1, sizeof(char));
   assert(first_spacer != NULL);
   memset(first_spacer, ' ', strlen(first));
 
-  const Item* second_it = its_next(&its);
-  ITEM_STR(second, second_it);
+  const Token* second_it = its_next(&its);
+  TOKEN_STR(second, second_it);
   char* second_spacer = (char*) calloc (strlen(second) + 1, sizeof(char));
   assert(second_spacer != NULL);
   memset(second_spacer, ' ', strlen(second));
 
-  const Item* it = its_next(&its);
-  ITEM_STR(self, it);
+  const Token* it = its_next(&its);
+  TOKEN_STR(self, it);
   char* pointer = (char*) calloc(strlen(self) + 1, sizeof(char));
   assert(pointer != NULL);
   memset(pointer, '^', strlen(self));
 
-  Item display_it = *it;
+  Token display_it = *it;
   if (display_it.t == TK_NONE) {
-    // Correct the position in none items.
+    // Correct the position in none tokens.
     display_it.pos.cl = strlen(second) + second_it->pos.cl + 1;
     display_it.pos.ln = second_it->pos.ln;
   }
@@ -187,31 +185,31 @@ void print_expect3_err(ItemStream its, const char* expectation, const char* file
   free(pointer);
 }
 
-void print_expect2_err(ItemStream its, const char* expectation, const char* filename) {
+void print_expect2_err(TokenStream its, const char* expectation, const char* filename) {
   assert(expectation != NULL);
   
   // `calloc` will indirectly add the null-terminator
   // to both `spacer` and `pointer`.
-  const Item* prev_it = its_next(&its);
-  ITEM_STR(prev, prev_it);
+  const Token* prev_it = its_next(&its);
+  TOKEN_STR(prev, prev_it);
   char* spacer = (char*) calloc (strlen(prev) + 1, sizeof(char));
   assert(spacer != NULL);
   memset(spacer, ' ', strlen(prev));
 
-  const Item* it = its_next(&its);
-  ITEM_STR(self, it);
+  const Token* it = its_next(&its);
+  TOKEN_STR(self, it);
   char* pointer = (char*) calloc (strlen(self) + 1, sizeof(char));
   assert(pointer != NULL);
   memset(pointer, '^', strlen(self));
 
-  Item display_it = *it;
+  Token display_it = *it;
   if (display_it.t == TK_NONE) {
-    // Correct the position in none items.
+    // Correct the position in none tokens.
     display_it.pos.cl = prev_it->pos.cl + strlen(prev) + 1;
     display_it.pos.ln = prev_it->pos.ln;
   }
 
-  ITEM_STR(next, its_next(&its));
+  TOKEN_STR(next, its_next(&its));
 
   if (filename == NULL) {
     errf(
@@ -237,8 +235,8 @@ void print_expect2_err(ItemStream its, const char* expectation, const char* file
   free(pointer);
 }
 
-void print_item_err(const Item* it, const char* filename) {
-  ITEM_STR(it_str, it);
+void print_token_err(const Token* it, const char* filename) {
+  TOKEN_STR(it_str, it);
   /*
   TODO:
   ```
@@ -268,22 +266,22 @@ void print_item_err(const Item* it, const char* filename) {
   }
 }
 
-void print_ident_err(ItemStream its, const char* filename) {
-  const Item* ctrlflow_it = its_next(&its);
-  ITEM_STR(ctrlflow_str, ctrlflow_it);
+void print_ident_err(TokenStream its, const char* filename) {
+  const Token* ctrlflow_it = its_next(&its);
+  TOKEN_STR(ctrlflow_str, ctrlflow_it);
   char* ctrlflow_spacer = (char*) calloc (strlen(ctrlflow_str) + 1, sizeof(char));
   assert(ctrlflow_spacer != NULL);
   memset(ctrlflow_spacer, ' ', strlen(ctrlflow_str));  // Implicit `* sizeof(char)`.
 
-  const Item* no_ident = its_next(&its);
-  ITEM_STR(no_id_str, no_ident);
+  const Token* no_ident = its_next(&its);
+  TOKEN_STR(no_id_str, no_ident);
   char* pointer = (char*) calloc (strlen(no_id_str) + 1, sizeof(char));
   assert(pointer != NULL);
   memset(pointer, '^', strlen(no_id_str));
 
-  Item display_it = *no_ident;
+  Token display_it = *no_ident;
   if (display_it.t == TK_NONE) {
-    // Correct the position in none items.
+    // Correct the position in none tokens.
     display_it.pos.cl = strlen(ctrlflow_str) + ctrlflow_it->pos.cl + 1;
     display_it.pos.ln = ctrlflow_it->pos.ln;
   }
@@ -311,16 +309,13 @@ void print_ident_err(ItemStream its, const char* filename) {
   free(pointer);
 }
 
-#define PARSE_OK 0
-#define PARSE_ERR -1
-
-static inline int map_inst(ItemStream* its, Inst* inst, const char* filename) {
+static inline int map_inst(TokenStream* its, Inst* inst, const char* filename) {
   (void) filename;
 
   assert(its != NULL);
   assert(inst != NULL);
 
-  const Item* it = its_next(its);
+  const Token* it = its_next(its);
   inst->pos = it->pos;
 
   // Any token which points to this function
@@ -330,11 +325,11 @@ static inline int map_inst(ItemStream* its, Inst* inst, const char* filename) {
   return PARSE_OK;
 }
 
-static inline int memory_inst(ItemStream* its, Inst* inst, const char* filename) {
+static inline int memory_inst(TokenStream* its, Inst* inst, const char* filename) {
   assert(its != NULL);
   assert(inst != NULL);
 
-  const Item* mem_it = its_next(its);
+  const Token* mem_it = its_next(its);
   inst->pos = mem_it->pos;
   // The tokens `TK_PUSH` and `TK_POP` map
   // to their instruction codes, too.
@@ -360,11 +355,11 @@ static inline int memory_inst(ItemStream* its, Inst* inst, const char* filename)
   return PARSE_OK;
 }
 
-static inline int goto_inst(ItemStream* its, Inst* inst, const char* filename) {
+static inline int goto_inst(TokenStream* its, Inst* inst, const char* filename) {
   assert(its != NULL);
   assert(inst != NULL);
 
-  const Item* goto_it = its_next(its);  // Consume `goto`.
+  const Token* goto_it = its_next(its);  // Consume `goto`.
   inst->pos = goto_it->pos;
   inst->code = (enum InstCode) goto_it->t;
 
@@ -378,11 +373,11 @@ static inline int goto_inst(ItemStream* its, Inst* inst, const char* filename) {
   return PARSE_OK;
 }
 
-static inline int if_goto_inst(ItemStream* its, Inst* inst, const char* filename) {
+static inline int if_goto_inst(TokenStream* its, Inst* inst, const char* filename) {
   assert(its != NULL);
   assert(inst != NULL);
 
-  const Item* if_goto_it = its_next(its);  // Consume `if-goto`.
+  const Token* if_goto_it = its_next(its);  // Consume `if-goto`.
   inst->pos = if_goto_it->pos;
   inst->code = (enum InstCode) if_goto_it->t;
 
@@ -396,7 +391,7 @@ static inline int if_goto_inst(ItemStream* its, Inst* inst, const char* filename
   return PARSE_OK;
 }
 
-static inline int label_meta(ItemStream* its, SymbolTable* st, size_t num_inst, const char* filename) {
+static inline int label_meta(TokenStream* its, SymbolTable* st, size_t num_inst, const char* filename) {
   assert(its != NULL);
   assert(st != NULL);
   
@@ -406,8 +401,8 @@ static inline int label_meta(ItemStream* its, SymbolTable* st, size_t num_inst, 
 
   if (its_lh(its)->t == TK_IDENT) {
     const char* ident = its_next(its)->ident;
-    struct SymKey key = mk_key(ident, SBT_LABEL);
-    struct SymVal val = mk_lbval(num_inst);
+    SymKey key = mk_key(ident, SBT_LABEL);
+    SymVal val = mk_lbval(num_inst);
     if (st != NULL)
       insert_st(st, key, val);
     else
@@ -421,7 +416,7 @@ static inline int label_meta(ItemStream* its, SymbolTable* st, size_t num_inst, 
 }
 
 static inline int function_inst(
-  ItemStream* its,
+  TokenStream* its,
   SymbolTable* st,
   size_t num_inst,
   const char* filename
@@ -451,8 +446,8 @@ static inline int function_inst(
     );
   }
 
-  struct SymKey key = mk_key(ident, SBT_FUNC);
-  struct SymVal val = mk_fnval(num_inst, nlocals);
+  SymKey key = mk_key(ident, SBT_FUNC);
+  SymVal val = mk_fnval(num_inst, nlocals);
 
   if (st != NULL)
     insert_st(st, key, val);
@@ -462,11 +457,11 @@ static inline int function_inst(
   return PARSE_OK;
 }
 
-static inline int call_inst(ItemStream* its, Inst* inst, const char* filename) {
+static inline int call_inst(TokenStream* its, Inst* inst, const char* filename) {
   assert(its != NULL);
   assert(inst != NULL);
 
-  const Item* call_it = its_next(its);
+  const Token* call_it = its_next(its);
   inst->pos = call_it->pos;
   inst->code = (enum InstCode) call_it->t;
 
@@ -486,7 +481,7 @@ static inline int call_inst(ItemStream* its, Inst* inst, const char* filename) {
   return PARSE_OK;
 }
 
-typedef int(*ParseFnPtr)(ItemStream*, Inst*, const char*);
+typedef int(*ParseFnPtr)(TokenStream*, Inst*, const char*);
 static ParseFnPtr parse_fns[] = {
   [TK_ADD]=map_inst,
   [TK_SUB]=map_inst,
@@ -505,7 +500,7 @@ static ParseFnPtr parse_fns[] = {
   [TK_PUSH]=memory_inst,
 };
 
-static inline int is_inst_token(const Token t) {
+static inline int is_inst_token(const TokenCode t) {
   return 
     (TK_PUSH <= t && t <= TK_POP) ||  // <- range of all memory instructions
     (TK_ADD <= t && t <= TK_NOT)  ||  // <- range of all arithmetic and logic instructions
@@ -513,16 +508,16 @@ static inline int is_inst_token(const Token t) {
     (TK_FUNC <= t && t <= TK_RET);  // <- range of all function calling instructions
 }
 
-Insts* parse(const Items* items, SymbolTable* st) {
-  assert(items != NULL);
+int parse(const Tokens* tokens, Insts* insts, SymbolTable* st) {
+  assert(tokens != NULL);
+  assert(insts != NULL);
   
-  ItemStream its = (ItemStream) {
-    .items=items->cell,
+  TokenStream its = (TokenStream) {
+    .tokens=tokens->cell,
     .idx=0,
-    .len=items->idx,
+    .len=tokens->idx,
   };
 
-  Insts* insts = new_insts(items->filename);
   int res;
   /* Each time this parse function is called, a new `Insts`
    * instance is created with its own local instruction count
@@ -535,16 +530,15 @@ Insts* parse(const Items* items, SymbolTable* st) {
   size_t st_num_inst = st == NULL ? 0 : st->num_inst;
   
   for (
-    const Item* it = its_lh(&its);
+    const Token* it = its_lh(&its);
     its.idx < its.len;
     it = its_lh(&its)
   ) {
     // Error if the token can't be the beginning
     // of an instruction.
     if (!is_inst_token(it->t)) {
-      del_insts(insts);
-      print_item_err(it, items->filename);
-      return NULL;
+      print_token_err(it, tokens->filename);
+      return PARSE_ERR;
     }
 
     // Allocate more memory if current limit was reached.
@@ -560,7 +554,7 @@ Insts* parse(const Items* items, SymbolTable* st) {
           &its,
           st,
           insts->idx + st_num_inst,
-          items->filename
+          tokens->filename
         );
         break;
       case TK_FUNC:
@@ -568,16 +562,16 @@ Insts* parse(const Items* items, SymbolTable* st) {
           &its,
           st,
           insts->idx + st_num_inst,
-          items->filename
+          tokens->filename
         );
         break;
       default:
         // Construct the current instruction from
-        // the item stream. A parse function might
+        // the token stream. A parse function might
         // advance by any number but has to stop
         // if it reaches the end of the input.
         res =
-          parse_fns[it->t](&its, &insts->cell[insts->idx], items->filename);
+          parse_fns[it->t](&its, &insts->cell[insts->idx], tokens->filename);
         /* Set the a pointer to the filename of
          * the instruction's source file in the
          * position instance. This is only a copy
@@ -589,13 +583,12 @@ Insts* parse(const Items* items, SymbolTable* st) {
     }
 
     if (res == PARSE_ERR) {
-      del_insts(insts);
-      return NULL;
+      return PARSE_ERR;
     }
   }
 
   if (st != NULL)
     st->num_inst +=  insts->idx;
 
-  return insts;
+  return PARSE_OK;
 }

@@ -1,5 +1,6 @@
 #include "scan.h"
-#include "utils.h"
+#include "err.h"
+#include "warn.h"
 
 #include <fcntl.h>
 #include <stdlib.h>
@@ -16,34 +17,33 @@ static char ident_buf[MAX_IDENT_LEN + 1];
 
 #define TOKEN_COMPLETED -1
 
-Items* new_items(const char* filename) {
-  Items* items = (Items*) malloc (sizeof(Items));
-  assert(items != NULL);
-  items->cur.ln = 0, items->cur.cl = 0, items->idx = 0;
-  items->len = ITEM_BLOCK_SIZE;
+#define INTERNAL_SCAN_ERR -1
+
+Tokens new_tokens(const char* filename) {
+  Tokens tokens = {
+    .idx = 0,
+    .len = TOKEN_BLOCK_SIZE,
+    .cur.ln = 0,
+    .cur.cl = 0,
+  };
 
   if (filename != NULL) {
-    items->filename = (char*) calloc (strlen(filename) + 1, sizeof(char));
-    assert(items->filename != NULL);
-    strcpy(items->filename, filename);
+    tokens.filename = (char*) calloc (strlen(filename) + 1, sizeof(char));
+    assert(tokens.filename != NULL);
+    strcpy(tokens.filename, filename);
   } else {
-    items->filename = NULL;
+    tokens.filename = NULL;
   }
 
-  items->cell = (Item*) calloc (items->len, sizeof(Item));
-  assert(items->cell != NULL);
+  tokens.cell = (Token*) calloc (tokens.len, sizeof(Token));
+  assert(tokens.cell != NULL);
 
-  return items;
+  return tokens;
 }
 
-void del_items(Items* items) {
-  // NULL-check to avoid segfaults when
-  // trying to free the members.
-  if (items != NULL) {
-    free(items->cell);
-    free(items->filename);
-    free(items);
-  }
+void del_tokens(Tokens tokens) {
+  free(tokens.cell);
+  free(tokens.filename);
 }
 
 static inline void inc(size_t *restrict offset, Pos *restrict pos) {
@@ -66,7 +66,7 @@ static inline void incl(size_t *restrict offset, Pos *restrict pos) {
   pos->cl = 0;
 }
 
-void item_str(const Item* it, char* str) {
+void token_str(const Token* it, char* str) {
   assert(it != NULL);
   assert(str != NULL);
   assert(TK_NONE <= it->t && it->t <= TK_IDENT);
@@ -105,9 +105,9 @@ void item_str(const Item* it, char* str) {
   if (it->t == TK_UINT) {
     // `uilit` is a 16-bit unsigned integer which
     // means it will never be more that 5 digits long.
-    snprintf(str, ITEM_STR_BUF, "%d", it->uilit);
+    snprintf(str, TOKEN_STR_BUF, "%d", it->uilit);
   } else {
-    snprintf(str, ITEM_STR_BUF, "%s", strs[it->t]);
+    snprintf(str, TOKEN_STR_BUF, "%s", strs[it->t]);
   }
 }
 
@@ -417,18 +417,18 @@ static ScanFnPtr match_fns[] = {
   NULL,
 };
 
-Item item_from_fn(size_t fn_idx, Pos pos) {
+Token token_from_fn(size_t fn_idx, Pos pos) {
   // IMPORTANT: It has to be ensured, that
-  // `Token(fn_idx) = fn_idx + 1` remains true.
-  Item item = {
+  // `TokenCode(fn_idx) = fn_idx + 1` remains true.
+  Token token = {
     .t=fn_idx + 1,
     .uilit=uilit,
     .pos=pos,
   };
-  strcpy(item.ident, ident_buf);
+  strcpy(token.ident, ident_buf);
   memset(ident_buf, ' ', MAX_IDENT_LEN);
   uilit = 0;
-  return item;
+  return token;
 }
 
 static inline int eat_ws(const char* blk, size_t len, size_t* offset, Pos* pos) {
@@ -459,7 +459,7 @@ static inline ssize_t num_trailing(const char* blk, size_t len) {
       // Error: there is whitespace left in this block
       // which means that the scanner failed to scan
       // all fully available tokens.
-      return SCAN_ERR;
+      return INTERNAL_SCAN_ERR;
     }
 
     offset++;
@@ -469,8 +469,8 @@ static inline ssize_t num_trailing(const char* blk, size_t len) {
   return offset;
 }
 
-ssize_t scan(Items* items, const char* blk, size_t len) {
-  assert(items != NULL);
+ssize_t scan_blk(Tokens* tokens, const char* blk, size_t len) {
+  assert(tokens != NULL);
   assert(blk != NULL);
   
   size_t offset = 0;
@@ -478,7 +478,7 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
   static int inside_comment = 0;
 
   // Eat up initial whitespace.
-  eat_ws(blk, len, &offset, &items->cur);
+  eat_ws(blk, len, &offset, &tokens->cur);
 
   while (offset < len) {
     // `offset` now points to the first
@@ -488,14 +488,14 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
     if (inside_comment) {
       if (blk[offset] == '\n') {
         inside_comment = 0;
-        incl(&offset, &items->cur);
+        incl(&offset, &tokens->cur);
         // Now that we've set `inside_comment` false we
         // are going to begin a new iteration where we
         // scan actual content. This requires that initial
         // whitespace is scanned first.
-        eat_ws(blk, len, &offset, &items->cur);
+        eat_ws(blk, len, &offset, &tokens->cur);
       } else {
-        inc(&offset, &items->cur);
+        inc(&offset, &tokens->cur);
       }
 
       continue;
@@ -503,12 +503,12 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
 
     int num_matched = 0;
     size_t fn_idx = 0;
-    Pos cur_start = items->cur;
+    Pos cur_start = tokens->cur;
     while (
       num_matched != TOKEN_COMPLETED
       && match_fns[fn_idx] != NULL
     ) {
-      num_matched = match_fns[fn_idx](blk, len, &offset, &items->cur);
+      num_matched = match_fns[fn_idx](blk, len, &offset, &tokens->cur);
       if (num_matched != TOKEN_COMPLETED)
         fn_idx++;
     }
@@ -521,15 +521,15 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
     } else if (num_matched == TOKEN_COMPLETED && match_fns[fn_idx] != NULL) {
       // The scan function `fn_idx`
       // completed successfully.
-      if (items->idx >= items->len) {
+      if (tokens->idx >= tokens->len) {
         // Increase size and reallocate in case the array is full.
-        items->len += ITEM_BLOCK_SIZE;
-        items->cell = realloc(items->cell, items->len * sizeof(Item));
-        assert(items->cell != NULL);
+        tokens->len += TOKEN_BLOCK_SIZE;
+        tokens->cell = realloc(tokens->cell, tokens->len * sizeof(Token));
+        assert(tokens->cell != NULL);
       }
 
-      items->cell[items->idx] = item_from_fn(fn_idx, cur_start);
-      items->idx ++;
+      tokens->cell[tokens->idx] = token_from_fn(fn_idx, cur_start);
+      tokens->idx ++;
     } else {
       // No scan function completed. This must
       // raise and error only if there are
@@ -542,7 +542,7 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
       // start of the next block.
       ssize_t ret = num_trailing(blk + offset, len - offset);
 
-      if (ret == SCAN_ERR) {
+      if (ret == INTERNAL_SCAN_ERR) {
         // Remove the trailing newline character
         // from the string to print it.
         char* pblk = (char*) calloc (len - offset, sizeof(char));
@@ -551,7 +551,7 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
         // pblk[len - 1] is NULL already because calloc
         // was used to allocate it. No need to add it.
 
-        scan_err(pblk, items->filename, cur_start);
+        scan_err(pblk, tokens->filename, cur_start);
         free(pblk);
       }
 
@@ -559,7 +559,7 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
     }
 
     // Eat up trailing whitespace.
-    eat_ws(blk, len, &offset, &items->cur);
+    eat_ws(blk, len, &offset, &tokens->cur);
   }
 
   // All characters in `blk` were scanned successfully.
@@ -567,17 +567,16 @@ ssize_t scan(Items* items, const char* blk, size_t len) {
   return 0;
 }
 
-Items* scan_blocks(const char* filename) {
-  assert(filename != NULL);
+int scan(Tokens* tokens) {
+  assert(tokens != NULL);
+  assert(tokens->filename != NULL);
   assert(SCAN_BLOCK_SIZE >= MAX_TOKEN_LEN);
   
-  int fd = open(filename, O_RDONLY);
+  int fd = open(tokens->filename, O_RDONLY);
   if (fd == -1)  {
-    return NULL;
+    return SCAN_ERR;
   }
 
-  Items* items = new_items(filename);
-  
   char* blk = (char*) malloc (SCAN_BLOCK_SIZE * sizeof(char));
   assert(blk != NULL);
 
@@ -598,8 +597,7 @@ Items* scan_blocks(const char* filename) {
       // since we cannot cast it into a `size_t`.
       free(blk);
       close(fd);
-      del_items(items);
-      return NULL;
+      return SCAN_ERR;
     }
 
     len = (size_t) bytes_read;
@@ -622,18 +620,17 @@ Items* scan_blocks(const char* filename) {
     // which could not be processed anymore, because
     // there were no whitespace characters between
     // them and the end of the block.
-    ssize_t res = scan(items, blk, len);
+    ssize_t res = scan_blk(tokens, blk, len);
 
     // `bytes_copied` is not used again if `res < 0` so
     // setting it to a potentially negative value is ok.
     // If `res == 0` `bytes_copied` should be set without
     // doing any copying. Otherwise it's set for copying.
     bytes_copied = (size_t) res;
-    if (res == SCAN_ERR) {
+    if (res == INTERNAL_SCAN_ERR) {
       free(blk);
       close(fd);
-      del_items(items);
-      return NULL;
+      return SCAN_ERR;
     } else if (res > 0) {
       memcpy(blk, blk + SCAN_BLOCK_SIZE - bytes_copied, bytes_copied);
     }
@@ -642,5 +639,5 @@ Items* scan_blocks(const char* filename) {
   free(blk);
   close(fd);
 
-  return items;
+  return SCAN_OK;
 }

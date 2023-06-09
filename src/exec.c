@@ -1,7 +1,7 @@
 #include "exec.h"
 #include "prog.h"
 #include "st.h"
-#include "utils.h"
+#include "err.h"
 #include "parse.h"
 
 #include <stdlib.h>
@@ -59,15 +59,15 @@ static jmp_buf exec_env;
     (x), (y), diff);                                      \
   longjmp(exec_env, EXEC_ERR);                            \
 }
-#define CTRL_FLOW_ERROR(ident, pos) {                  \
-  if (strcmp((ident), "Sys.init") == 0) {              \
-    perr((pos), "can't jump to function `Sys.init`.\n" \
-      SOLUTION_ARROW "Write it");                      \
-  } else {                                             \
-    perrf((pos), "can't jump to %s",                   \
-      (ident));                                        \
-  }                                                    \
-  longjmp(exec_env, EXEC_ERR);                         \
+#define CTRL_FLOW_ERROR(ident, pos) {                 \
+  if (strcmp((ident), "Sys.init") == 0) {             \
+    perr((pos), "can't jump to function `Sys.init`; " \
+    "Write it!");                                     \
+  } else {                                            \
+    perrf((pos), "can't jump to %s",                  \
+      (ident));                                       \
+  }                                                   \
+  longjmp(exec_env, EXEC_ERR);                        \
 }
 #define NARGS_ERROR(nargs, sp, pos) {                           \
   perrf((pos), "given number of stack arguments (%d) is wrong." \
@@ -76,7 +76,7 @@ static jmp_buf exec_env;
   longjmp(exec_env, EXEC_ERR);                                  \
 }
 
-void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
+void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
   assert(stack != NULL);
   assert(mem != NULL);
 
@@ -173,7 +173,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
   }
 }
 
-void exec_push(Inst inst, Stack* stack, Heap* heap, struct Memory* mem) {
+void exec_push(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
   assert(stack != NULL);
   assert(heap != NULL);
   assert(mem != NULL);
@@ -403,12 +403,12 @@ static inline void exec_gt(Stack* stack, Pos pos) {
 #define active_file(prog) (prog->files[prog->fi])
 
 /* Get current instruction */
-#define active_inst(prog) (prog->files[prog->fi].insts->cell[prog->files[prog->fi].ei])
+#define active_inst(prog) (prog->files[prog->fi].insts.cell[prog->files[prog->fi].ei])
 
 #define JMP_OK 1
 #define JMP_ERR 0
 
-static int jump_to(struct Program* prog, struct SymKey key, struct SymVal* val) {
+static int jump_to(Program* prog, SymKey key, SymVal* val) {
   assert(prog != NULL);
   assert(val != NULL);
 
@@ -440,12 +440,12 @@ static int jump_to(struct Program* prog, struct SymKey key, struct SymVal* val) 
   }
 }
 
-static inline void exec_goto(struct Program* prog, Pos pos) {
+static inline void exec_goto(Program* prog, Pos pos) {
   assert(prog != NULL);
 
-  struct SymVal val;
-  struct SymKey key = mk_key(
-    active_file(prog).insts->cell[active_file(prog).ei].ident,
+  SymVal val;
+  SymKey key = mk_key(
+    active_file(prog).insts.cell[active_file(prog).ei].ident,
     SBT_LABEL
   );
   if (!jump_to(prog, key, &val))
@@ -453,7 +453,7 @@ static inline void exec_goto(struct Program* prog, Pos pos) {
   /* Else everything went well. */
 }
 
-static inline void exec_if_goto(struct Program* prog, Pos pos) {
+static inline void exec_if_goto(Program* prog, Pos pos) {
   assert(prog != NULL);
 
   Word val;
@@ -463,9 +463,9 @@ static inline void exec_if_goto(struct Program* prog, Pos pos) {
   /* Jump if topmost value is true. */
 
   if (val != FALSE) {
-    struct SymVal val;
-    struct SymKey key = mk_key(
-      active_file(prog).insts->cell[active_file(prog).ei].ident,
+    SymVal val;
+    SymKey key = mk_key(
+      active_file(prog).insts.cell[active_file(prog).ei].ident,
       SBT_LABEL
     );
 
@@ -477,11 +477,11 @@ static inline void exec_if_goto(struct Program* prog, Pos pos) {
   }
 }
 
-static inline void exec_call(struct Program* prog, Pos pos) {
+static inline void exec_call(Program* prog, Pos pos) {
   assert(prog != NULL);
 
-  const char* ident = active_file(prog).insts->cell[active_file(prog).ei].ident;
-  Word nargs = active_file(prog).insts->cell[active_file(prog).ei].nargs;
+  const char* ident = active_file(prog).insts.cell[active_file(prog).ei].ident;
+  Word nargs = active_file(prog).insts.cell[active_file(prog).ei].nargs;
   Stack* stack = &prog->stack;
   Heap* heap = &prog->heap;
 
@@ -491,8 +491,8 @@ static inline void exec_call(struct Program* prog, Pos pos) {
   if (nargs > stack->sp)
     NARGS_ERROR(nargs, stack->sp, pos);
 
-  struct SymVal val;
-  struct SymKey key = mk_key(ident, SBT_FUNC);
+  SymVal val;
+  SymKey key = mk_key(ident, SBT_FUNC);
   if (!jump_to(prog, key, &val))
     CTRL_FLOW_ERROR(ident, pos);
 
@@ -531,7 +531,7 @@ static inline void exec_call(struct Program* prog, Pos pos) {
   active_file(prog).ei = val.inst_addr - 1;
 }
 
-void exec_ret(struct Program* prog, Pos pos) {
+void exec_ret(Program* prog, Pos pos) {
   assert(prog != NULL);
 
   Stack* stack = &prog->stack;
@@ -569,7 +569,7 @@ void exec_ret(struct Program* prog, Pos pos) {
   prog->files[prog->fi].ei = ret_ei;
 }
 
-int exec(struct Program* prog) {
+int exec_prog(Program* prog) {
   assert(prog != NULL);
 
   int arrive = setjmp(exec_env);
@@ -577,11 +577,11 @@ int exec(struct Program* prog) {
     return EXEC_ERR;
 
   /* Reaching the end of any file is enough to end execution.
-   * `insts->idx` points to the next unused instruction field
+   * `insts.idx` points to the next unused instruction field
    * in the instruction buffer from parsing. Thus it can be
    * used here as the number of instructions in the buffer. */
 
-  for (; active_file(prog).ei < active_file(prog).insts->idx; active_file(prog).ei ++) {
+  for (; active_file(prog).ei < active_file(prog).insts.idx; active_file(prog).ei ++) {
     switch(active_inst(prog).code) {
       case POP:
         exec_pop(

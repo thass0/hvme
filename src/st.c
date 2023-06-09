@@ -11,7 +11,7 @@ SymbolTable new_st(void) {
                                // `offset` other instructions were put infront
                                // of the instructions this symbol table points to.
   };
-  st.cell = (struct Symbol*) calloc (sizeof(struct Symbol), st.len);
+  st.cell = (Symbol*) calloc (sizeof(Symbol), st.len);
   assert(st.cell != NULL);
   return st;
 }
@@ -20,28 +20,28 @@ void del_st(SymbolTable st) {
   free(st.cell);
 }
 
-struct SymKey mk_key(const char* ident, enum SymKeyType type) {
-  struct SymKey key = { .type = type };
+SymKey mk_key(const char* ident, SymKeyType type) {
+  SymKey key = { .type = type };
   strncpy(key.ident, ident, MAX_IDENT_LEN);
   key.ident[strlen(ident)] = '\0';
   return key;
 }
 
-struct SymVal mk_lbval(size_t inst_addr) {
-  return (struct SymVal) {
+SymVal mk_lbval(size_t inst_addr) {
+  return (SymVal) {
     .inst_addr = inst_addr,
     .nlocals = 0,
   };
 }
 
-struct SymVal mk_fnval(size_t inst_addr, uint16_t nlocals) {
-  return (struct SymVal) {
+SymVal mk_fnval(size_t inst_addr, uint16_t nlocals) {
+  return (SymVal) {
     .inst_addr = inst_addr,
     .nlocals = nlocals,
   };
 }
 
-static inline int keys_are_eq(const struct SymKey* a, const struct SymKey* b) {
+static inline int keys_are_eq(const SymKey* a, const SymKey* b) {
   if (a == NULL || b == NULL)
     return 0;
 
@@ -49,14 +49,14 @@ static inline int keys_are_eq(const struct SymKey* a, const struct SymKey* b) {
          (a->type == b->type);
 }
 
-static inline int vals_are_eq(const struct SymVal* a, const struct SymVal* b) {
+static inline int vals_are_eq(const SymVal* a, const SymVal* b) {
   if (a == NULL || b == NULL)
     return 0;
 
   return a->inst_addr == b->inst_addr && a->nlocals == b->nlocals;
 }
 
-static inline unsigned long djb2hash_key(const struct SymKey* key) {
+static inline unsigned long djb2hash_key(const SymKey* key) {
   assert(key != NULL);
 
   const char* identp = key->ident;
@@ -82,16 +82,16 @@ static inline size_t delim_hash(unsigned long hash, size_t len) {
 
 InsertResult insert_st(
   SymbolTable* st,
-  struct SymKey key,
-  struct SymVal val
+  SymKey key,
+  SymVal val
 ) {
   assert(st != NULL);
 
   if (st->used >= st->len) {
     // Realloc `cell` if the symbol table is full.
     st->len += ST_BLOCK_SIZE;
-    st->cell = (struct Symbol*) realloc (st->cell, st->len * sizeof(struct Symbol));
-    memset(st->cell + st->len - ST_BLOCK_SIZE, 0, ST_BLOCK_SIZE * sizeof(struct Symbol));
+    st->cell = (Symbol*) realloc (st->cell, st->len * sizeof(Symbol));
+    memset(st->cell + st->len - ST_BLOCK_SIZE, 0, ST_BLOCK_SIZE * sizeof(Symbol));
   }
 
   unsigned long hash = djb2hash_key(&key);
@@ -141,15 +141,15 @@ InsertResult insert_st(
    */
   assert(st->cell[idx].key.type == SBT_UNUSED);
 
-  memcpy(&st->cell[idx].key, &key, sizeof(struct SymKey));
-  memcpy(&st->cell[idx].val, &val, sizeof(struct SymVal));
+  memcpy(&st->cell[idx].key, &key, sizeof(SymKey));
+  memcpy(&st->cell[idx].val, &val, sizeof(SymVal));
 
   st->used ++;
 
   return INRES_OK;
 }
 
-GetResult get_st(SymbolTable st, const struct SymKey* key, struct SymVal* val) {
+GetResult get_st(SymbolTable st, const SymKey* key, SymVal* val) {
   assert(key != NULL);
   assert(val != NULL);
 

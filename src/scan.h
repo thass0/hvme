@@ -43,7 +43,7 @@ typedef enum {
   TK_NOT,       // Literal `not`: end of operation range.
   TK_IDENT,     // Identifier (recognizes `[A-Za-z_\.:][0-9A-Za-z_\.:]*`)
                 // Must be at the end so it has to lowest precedence when scaning.
-} Token;
+} TokenCode;
 
 # ifndef MAX_IDENT_LEN
 # define MAX_IDENT_LEN 24
@@ -57,9 +57,9 @@ typedef enum {
 # define MAX_TOKEN_LEN MAX_IDENT_LEN
 # endif
 
-# ifndef ITEM_STR_BUF
-// Size of char buffer for `item_str`.
-# define ITEM_STR_BUF (MAX_TOKEN_LEN + 1)
+# ifndef TOKEN_STR_BUF
+// Size of char buffer for `token_str`.
+# define TOKEN_STR_BUF (MAX_TOKEN_LEN + 1)
 # endif
 
 typedef uint16_t Uint;
@@ -67,49 +67,49 @@ typedef uint16_t Uint;
 typedef struct {
   unsigned int ln;
   unsigned int cl;
-  /* Not used by the scanner because items
+  /* Not used by the scanner because tokens
    * doesn't contain a filename which will
    * last long enought. */
   const char* filename;
 } Pos;
 
-// Scanned item
+// Scanned token
 typedef struct {
-  Token t;
+  TokenCode t;
   Pos pos;
   Uint uilit;
   char ident[MAX_IDENT_LEN + 1];
-} Item;
+} Token;
 
 typedef struct {
   size_t idx;
   size_t len;
-  Item* cell;
+  Token* cell;
   char* filename;
   Pos cur;   // Used only while scanning to track where we are.
-} Items;
+} Tokens;
 
-# ifndef ITEM_BLOCK_SIZE
-# define ITEM_BLOCK_SIZE 0x1000
+# ifndef TOKEN_BLOCK_SIZE
+# define TOKEN_BLOCK_SIZE 0x1000
 # endif
 
-// Initialize a new `Items` instance.
-Items* new_items(const char* filename);
+// Initialize a new `Tokens` instance.
+Tokens new_tokens(const char* filename);
 // Delete an `Items` instance.
-void del_items(Items* items);
+void del_tokens(Tokens tokens);
 
 // Writes `it` to `str`. `str` must be able
-// to hold  at least `ITEM_STR_BUF` characters
+// to hold  at least `TOKEN_STR_BUF` characters
 // or else this function might segfault.
-void item_str(const Item* it, char* str);
+void token_str(const Token* it, char* str);
 
 // Macro to handle the fixed-size string
-// buffer used to stringify an item. This
-// macro should be the only way `item_str`
+// buffer used to stringify a token. This
+// macro should be the only way `token_str`
 // is called.
-# define ITEM_STR(id, item) \
-  char id[ITEM_STR_BUF]; \
-  item_str(item, id);
+# define TOKEN_STR(id, token) \
+  char id[TOKEN_STR_BUF];    \
+  token_str(token, id);
 
 
 # ifndef SCAN_BLOCK_SIZE
@@ -120,14 +120,10 @@ void item_str(const Item* it, char* str);
 #  endif
 # endif
 
-// Scans the input and returns a
-// heap-allocated array of tokens.
-Items* scan_blocks(const char* filename);
+#define SCAN_ERR 0
+#define SCAN_OK 1
 
-#define SCAN_ERR -1
-
-// Scans `blk` for `len` characters and appends the
-// scanned items in `items`.
-ssize_t scan(Items* items, const char* blk, size_t len);
+/* Scan input and store the tokens in `tokens`. */
+int scan(Tokens* tokens);
 
 #endif  // _SCAN_H_
