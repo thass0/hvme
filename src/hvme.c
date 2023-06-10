@@ -4,7 +4,7 @@
 #include "exec.h"
 
 #include <string.h>
-#include <argp.h>
+#include <stdio.h>
 
 int run_hvme(int argc, const char* argv[]) {
   if (argc <= 1) {
@@ -16,15 +16,13 @@ int run_hvme(int argc, const char* argv[]) {
       return 1;
 
     int ret = exec_prog(prog);
-
-    if (ret == 0)
-      printf("%d\n", prog->stack.sp > 0
-        ? prog->stack.ops[prog->stack.sp - 1]
-        : 0
-      );
-
     del_prog(prog);
 
+    /* If `ret != 0` we have an error and
+     * the output will already be formatted
+     * correctly. */
+    if (ret == 0) clean_stdout();
+    
     return ret;
   }
 }

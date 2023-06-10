@@ -1,0 +1,10 @@
+function Sys.init 0
+	// Read a line starting at heap[16].
+	push constant 16
+	call Sys.read_line 1
+
+	// Print this string.
+	push constant 16
+	call Sys.print_hstr 2
+
+	return

@@ -27,10 +27,10 @@ static jmp_buf exec_env;
        "`%lu` (max. index is 1)", (addr));        \
   longjmp(exec_env, EXEC_ERR);                    \
 }
-#define ADDR_OVERFLOW_ERROR(instp, addr) { \
+#define HEAP_ADDR_OVERFLOW_ERROR(instp, addr) { \
   INST_STR(inst_str_buf, (instp));         \
   perrf((instp)->pos, "address overflow: " \
-        "`%s` tries to access RAM at %lu", \
+        "`%s` tries to access heap at %lu", \
         inst_str_buf, (addr));             \
   longjmp(exec_env, EXEC_ERR);             \
 }
@@ -74,6 +74,10 @@ static jmp_buf exec_env;
     " There are only %lu elements on the stack!",               \
     (nargs), (sp));                                             \
   longjmp(exec_env, EXEC_ERR);                                  \
+}
+#define READ_IO_ERROR(pos) {               \
+  perr((pos), "system line read failed."); \
+  longjmp(exec_env, EXEC_ERR);             \
 }
 
 void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
@@ -139,7 +143,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
         if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR(inst.pos);
         heap_set(*heap, (Addr)(offset + heap->_this), val);
       } else {
-        ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);
+        HEAP_ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);
       }
       break;
     case THAT:
@@ -148,7 +152,7 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
         if (!spop(stack, &val)) STACK_UNDERFLOW_ERROR(inst.pos);
         heap_set(*heap, (Addr)(offset + heap->that), val);
       } else {
-        ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);
+        HEAP_ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);
       }
       break;
     case PTR:
@@ -225,14 +229,14 @@ void exec_push(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
       if (offset + heap->_this <= MEM_HEAP_SIZE) {
         spush(stack, heap_get(*heap, (Addr)(offset + heap->_this)));
       } else {
-        ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);        
+        HEAP_ADDR_OVERFLOW_ERROR(&inst, offset + heap->_this);        
       }
       break;
     case THAT:
       if (offset + heap->that <= MEM_HEAP_SIZE) {
         spush(stack, heap_get(*heap, (Addr)(offset + heap->that)));
       } else {
-        ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);        
+        HEAP_ADDR_OVERFLOW_ERROR(&inst, offset + heap->that);        
       }
       break;
     case PTR:
@@ -569,6 +573,61 @@ void exec_ret(Program* prog, Pos pos) {
   prog->files[prog->fi].ei = ret_ei;
 }
 
+static inline void exec_builtin_print(Stack* stack, Pos pos) {
+  assert(stack != NULL);
+
+  Word val;
+  if (!spop(stack, &val))
+    STACK_UNDERFLOW_ERROR(pos);
+
+  printf("%c", (char) val);
+}
+
+static inline void exec_builtin_read_char(Stack* stack) {
+  assert(stack != NULL);
+
+  Word ch = getchar();
+  spush(stack, ch);
+}
+
+static inline void exec_builtin_read_line(Program* prog, Pos pos) {
+  assert(prog != NULL);
+
+  Word heap_addr;
+  if (!spop(&prog->stack, &heap_addr))
+    STACK_UNDERFLOW_ERROR(pos);
+
+  char* buf = NULL;
+  size_t len = 0;
+  ssize_t nread_buf = 0;
+  if ((nread_buf = getline(&buf, &len, stdin)) == -1) {
+    free(buf);
+    READ_IO_ERROR(pos);
+  }
+  // Cast is OK because `-1` was checked.
+  // `getline` always includes the delimiter ('\n')
+  // which we want to remove. This means that while
+  // the minimum number of characters will be one, we
+  // have to decrease it by one.
+  assert(nread_buf >= 1);
+  size_t nread = nread_buf - 1;
+
+  if (heap_addr + nread > MEM_HEAP_SIZE) {
+    free(buf);
+    HEAP_ADDR_OVERFLOW_ERROR(&active_inst(prog), heap_addr + nread);
+  }
+
+  /* `memcpy` doesn't work here because we read
+   * `char`s which we must store as `Word`s. */
+  for (unsigned int i = 0; i < nread; i++) {
+    prog->heap.mem[heap_addr + i] = (Word) buf[i];
+  }
+
+  free(buf);
+
+  spush(&prog->stack, (Word) nread);
+}
+
 int exec_prog(Program* prog) {
   assert(prog != NULL);
 
@@ -637,6 +696,15 @@ int exec_prog(Program* prog) {
         break;
       case RET:
         exec_ret(prog, active_inst(prog).pos);
+        break;
+      case BUILTIN_PRINT:
+        exec_builtin_print(&prog->stack, active_inst(prog).pos);
+        break;
+      case BUILTIN_READ_CHAR:
+        exec_builtin_read_char(&prog->stack);
+        break;
+      case BUILTIN_READ_LINE:
+        exec_builtin_read_line(prog, active_inst(prog).pos);
         break;
       default: {
         INST_STR(str, &active_inst(prog));

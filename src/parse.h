@@ -36,6 +36,13 @@ typedef struct {
     GOTO=TK_GOTO, IF_GOTO=TK_IF_GOTO,
     // Function calling.
     CALL=TK_CALL, RET=TK_RET,
+    // Builtin instructions. No way to directy access them.
+    // `TK_IDENT` is the last token (must be since it has the
+    // lowest precedence). Therefore it's used from here on out
+    // to ensure that there is no overlap.
+    BUILTIN_PRINT=(TK_IDENT + 1),
+    BUILTIN_READ_CHAR,
+    BUILTIN_READ_LINE,
   } code;
 
   union {
@@ -72,10 +79,10 @@ Insts new_insts(const char* filename);
 // Delete an `Insts` instance.
 void del_insts(Insts insts);
 
-# ifndef INST_STR_BUF
+#ifndef INST_STR_BUF
 // Size of `char` buf to pass to `inst_str`.
-# define INST_STR_BUF 40
-# endif  // INST_STR_BUF
+#define INST_STR_BUF 40
+#endif  // INST_STR_BUF
 
 // Write a string describing `i` to `str`.
 // `str` must be large enought to hold at
@@ -86,14 +93,14 @@ void inst_str(const Inst* i, char* str);
 // buffer used to stringify an instruction.
 // This macro should be the only way
 // `token_str` is called.
-# define INST_STR(id, inst) \
+#define INST_STR(id, inst) \
   char id[INST_STR_BUF]; \
   inst_str(inst, id);
 
 
-# ifndef INST_BLOCK_SIZE
-# define INST_BLOCK_SIZE 0x1000
-# endif  // INST_BLOCK_SIZE
+#ifndef INST_BLOCK_SIZE
+#define INST_BLOCK_SIZE 0x1000
+#endif  // INST_BLOCK_SIZE
 
 // Last element in instruction array.
 #define NULL_INST (Inst) { .code=IC_NONE }

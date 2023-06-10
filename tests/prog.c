@@ -11,7 +11,7 @@ TEST(empty_prog_is_correct) {
   Program* prog = make_prog(0, argv);
   assert_int(prog->nfiles, ==, 1);
   assert_int(prog->fi, ==, 0);
-  assert_string_equal(prog->files[0].filename, "<startup code>");
+  assert_string_equal(prog->files[0].filename, "<system>");
   assert_int(prog->files[0].insts.cell[0].code, ==, PUSH);
   assert_int(prog->files[0].insts.cell[0].mem.seg, ==, CONST);
   assert_int(prog->files[0].insts.cell[0].mem.offset, ==, 0);
@@ -36,7 +36,7 @@ TEST(single_file_prog_is_correct) {
   assert_ptr_not_null(prog);
   assert_int(prog->nfiles, ==, 2);
   assert_int(prog->fi, ==, 0);
-  assert_string_equal(prog->files[0].filename, "<startup code>");
+  assert_string_equal(prog->files[0].filename, "<system>");
   /* Check instructions of the given file */
   assert_int(prog->files[1].insts.cell[0].code, ==, PUSH);
   assert_int(prog->files[1].insts.cell[0].mem.seg, ==, CONST);
@@ -69,7 +69,7 @@ TEST(multi_file_prog_is_correct) {
   assert_ptr_not_null(prog);
   assert_int(prog->nfiles, ==, 4);
   assert_int(prog->fi, ==, 0);
-  assert_string_equal(prog->files[0].filename, "<startup code>");
+  assert_string_equal(prog->files[0].filename, "<system>");
   /* First file */
   assert_int(prog->files[1].insts.cell[0].code, ==, PUSH);
   assert_int(prog->files[1].insts.cell[0].mem.seg, ==, CONST);

@@ -100,25 +100,153 @@ Memory new_mem(void) {
   return mem;
 }
 
-void init_startup_file(File* file) {
+/* Add builtin instruction. */
+void add_bii(Insts* insts, Inst add) {
+  assert(insts != NULL);
+
+  /* Realloc if full. */
+  if (insts->idx == insts->len) { 
+    insts->len += INST_BLOCK_SIZE;
+    insts->cell = (Inst*) realloc (insts->cell,
+      insts->len * sizeof(Inst));
+    assert(insts->cell != NULL);
+  }
+
+  insts->cell[insts->idx] = add;
+
+  /* Give the instruction an automatic position.
+   * Without special formatting each instruction
+   * spans one line. Hence, we can translate the
+   * instruction index into the line. The column
+   * number can stay unchanged (0). */
+  insts->cell[insts->idx].pos.ln = insts->idx;
+  insts->cell[insts->idx].pos.filename = insts->filename;
+
+  insts->idx ++;
+}
+
+void builtin_print(File* file) {
   assert(file != NULL);
 
-  const char sc[] = "<startup code>";
+  insert_st(&file->st,
+    mk_key("Sys.print", SBT_FUNC),
+    mk_fnval(file->insts.idx, 0));
+
+  /* `Sys.print` receives a single argument which
+   * is an ASCII code point to be displayed. */
+
+  // Call the builtin with the ASCII value as the argument.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 }});
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_PRINT });
+  // Push `0` as return code and return.
+  add_bii(&file->insts,  (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
+  add_bii(&file->insts, (Inst) { .code=RET });
+}
+
+void builtin_print_hstr(File* file) {
+  assert(file != NULL);
+
+  insert_st(&file->st,
+    mk_key("Sys.print_hstr", SBT_FUNC),
+    mk_fnval(file->insts.idx, 2));
+
+  /* `Sys.print_hstr (nchars, addr) -> 0` will
+   * print a character array of length `nchars`. */ 
+
+  // Copy `nchars` into counter
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=0 } });
+  // Copy `addr` into pointer.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=1 } });
+  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=1 } });
+  // Print loop.
+  insert_st(&file->st,
+    mk_key("SYS_PRINT_HEAP_STR_LOOP", SBT_LABEL),
+    mk_lbval(file->insts.idx));
+  // Print current char.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=1 } });
+  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=PTR, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=THIS, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=CALL, .ident="Sys.print", .nargs=1 });
+  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=CONST, .offset=0 } });  // Delete return value.
+  // Advance pointer
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=1 } });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=1 } });
+  add_bii(&file->insts, (Inst) { .code=ADD });
+  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=1 } });
+  // Decrease counter and conditionally repeat.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=1 } });
+  add_bii(&file->insts, (Inst) { .code=SUB });
+  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 } });
+  add_bii(&file->insts, (Inst) { .code=GT });
+  add_bii(&file->insts, (Inst) { .code=IF_GOTO, .ident="SYS_PRINT_HEAP_STR_LOOP" });
+  // Return (nothing)
+  add_bii(&file->insts,  (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
+  add_bii(&file->insts, (Inst) { .code=RET });
+}
+
+void builtin_read_line(File* file) {
+  assert(file != NULL);
+
+  /* `Sys.read_line(addr) -> nchars` reads a line
+   * and stores it on heap starting at `addr`. The
+   * number of chars stored is returned. */
+
+  insert_st(&file->st,
+    mk_key("Sys.read_line", SBT_FUNC),
+    mk_fnval(file->insts.idx, 1));
+  // Push heap address to store the read string.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 }});
+  // Read a line and store the string at this heap address.
+  // `BUILTIN_READ_LINE` pushes the number of chars read on stack.
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_READ_LINE });
+  // Return the number of read characters (pushed by `BUILTIN_READ_LINE`).
+  add_bii(&file->insts, (Inst) { .code=RET });
+}
+
+void builtin_read_char(File* file) {
+  assert(file != NULL);
+
+  /* `Sys.read_char() -> char` reads a single
+   * character and returns it. */
+
+  insert_st(&file->st,
+    mk_key("Sys.read_char", SBT_FUNC),
+    mk_fnval(file->insts.idx, 1));
+  // Read a character.
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_READ_CHAR });
+  // Return the character.
+  add_bii(&file->insts, (Inst) { .code=RET });
+}
+
+void init_system_file(File* file) {
+  assert(file != NULL);
+
+  const char sc[] = "<system>";
   file->filename = (char*) calloc (strlen(sc) + 1, sizeof(char));
   assert(file->filename != NULL);
   strcpy(file->filename, sc);
 
-  /* All of this wastes some memory. */
-
   file->st = new_st();
-
-  Insts insts = new_insts(sc);
-  assert(2 <= INST_BLOCK_SIZE);
-  insts.cell[insts.idx ++] = (Inst) {.code=PUSH, .mem={ .seg=CONST, .offset=0 }};
-  insts.cell[insts.idx ++] = (Inst) {.code=CALL, .ident="Sys.init", .nargs=1 };
-  file->insts = insts;
-
+  file->insts = new_insts(sc);
   file->mem = new_mem();
+
+  /* Store builtin functions in system file. */
+  
+  builtin_print(file);
+  builtin_print_hstr(file);
+  builtin_read_char(file);
+  builtin_read_line(file);
+
+  /* Add startup code (must be at the very end).
+   * This first pushed the number of arguments `Sys.init`
+   * will receive on stack and then calls `Sys.init`. */
+  file->ei = file->insts.idx;
+  add_bii(&file->insts, (Inst) {.code=PUSH, .mem={ .seg=CONST, .offset=0 }});
+  add_bii(&file->insts, (Inst) {.code=CALL, .ident="Sys.init", .nargs=1 });
 }
 
 #define PROC_ERR 0
@@ -178,9 +306,9 @@ Program* make_prog(unsigned int nfn, const char* fn[]) {
   prog->files = (File*) calloc (nfn + 1, sizeof(File));
   assert(prog->files != NULL);
 
-  /* Store the startup code the first file.
-   * `fi` starts in this file. */
-  init_startup_file(&prog->files[prog->nfiles ++]);
+  /* Store the system code (startup code, builtins etc.)
+   * the first file. `fi` starts in this file. */
+  init_system_file(&prog->files[prog->nfiles ++]);
   
   for (; prog->nfiles <= nfn; prog->nfiles++) {
     warn_file_ext(fn[prog->nfiles - 1]);

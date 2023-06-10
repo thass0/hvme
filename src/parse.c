@@ -69,7 +69,9 @@ void inst_str(const Inst* i, char* str) {
       [TK_ADD]="add", [TK_SUB]="sub", [TK_NEG]="neg",
       [TK_AND]="and", [TK_OR]="or", [TK_NOT]="not",
       [TK_EQ]="eq", [TK_GT]="gt", [TK_LT]="lt",
-      [TK_RET]="return",
+      [TK_RET]="return", [BUILTIN_PRINT]="<builtin print>",
+      [BUILTIN_READ_CHAR]="<builtin read char>",
+      [BUILTIN_READ_LINE]="<builtin read line>",
     };
     strncpy(str, insts[i->code], INST_STR_BUF);
   }

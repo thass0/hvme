@@ -1,0 +1,27 @@
+function Sys.init 0
+	push constant 72   // 'H'
+	call Sys.print 1
+	push constant 101  // 'e'
+	call Sys.print 1
+	push constant 108  // 'l'
+	call Sys.print 1
+	push constant 108  // 'l'
+	call Sys.print 1
+	push constant 111  // 'o'
+	call Sys.print 1
+	push constant 44  // ','
+	call Sys.print 1
+	push constant 32  // ' '
+	call Sys.print 1
+	push constant 87  // 'W'
+	call Sys.print 1
+	push constant 111  // 'o'
+	call Sys.print 1
+	push constant 114  // 'r'
+	call Sys.print 1
+	push constant 108  // 'l'
+	call Sys.print 1
+	push constant 100  // 'd'
+	call Sys.print 1
+	push constant 33   // '!'
+	call Sys.print 1
