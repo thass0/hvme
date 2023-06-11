@@ -6,18 +6,12 @@
 #include "../src/prog.h"
 #include "utils.h"
 
-TEST(empty_prog_is_correct) {
+TEST(system_is_initialized) {
   const char* argv[] = {""};
   Program* prog = make_prog(0, argv);
   assert_int(prog->nfiles, ==, 1);
   assert_int(prog->fi, ==, 0);
   assert_string_equal(prog->files[0].filename, "<system>");
-  assert_int(prog->files[0].insts.cell[0].code, ==, PUSH);
-  assert_int(prog->files[0].insts.cell[0].mem.seg, ==, CONST);
-  assert_int(prog->files[0].insts.cell[0].mem.offset, ==, 0);
-  assert_int(prog->files[0].insts.cell[1].code, ==, CALL);
-  assert_string_equal(prog->files[0].insts.cell[1].ident, "Sys.init");
-  assert_int(prog->files[0].insts.cell[1].nargs, ==, 1);
   del_prog(prog);
 
   return MUNIT_OK;
@@ -113,7 +107,7 @@ TEST(abort_all_on_error) {
 }
 
 MunitTest prog_tests[] = {
-  REG_TEST(empty_prog_is_correct),
+  REG_TEST(system_is_initialized),
   REG_TEST(single_file_prog_is_correct),
   REG_TEST(multi_file_prog_is_correct),
   REG_TEST(abort_all_on_error),

@@ -78,7 +78,7 @@ TEST(correct_memory_errors) {
     del_prog(prog);
     assert_int(res, ==, EXEC_ERR);
     assert_int(check_stream("address overflow: "
-      "`pop this 1` tries to access RAM at 65536", 30, stderr), ==, 1);
+      "`pop this 1` tries to access heap at 65536", 30, stderr), ==, 1);
   }
 
   return MUNIT_OK;
