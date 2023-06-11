@@ -1,3 +1,5 @@
+// Test result: 32
+
 function mult 3
 	push argument 0
 	pop local 2
@@ -21,8 +23,31 @@ label end
 
 	return
 
-function Sys.init 0
-	// Expected output: 4 * 8 = 32
+function Sys.init 1
 	push constant 4
 	push constant 8
 	call mult 2
+
+	push constant 32  // Expected result
+	eq
+	not
+	if-goto sys_init_end
+
+	// Print the number 32
+	push constant 0
+	pop local 0
+	push local 0
+	pop pointer 0
+	push constant 51 // ASCII 3
+	pop this 0
+	push constant 50  // ASCII 2
+	pop this 1
+	push constant 2  // Length
+	push local 0  // Address
+	call Sys.print_hstr 2
+	pop constant 0
+
+	label sys_init_end
+
+	push constant 0
+	return

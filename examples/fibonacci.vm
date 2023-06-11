@@ -1,3 +1,5 @@
+// Test result: 987
+
 // This file is part of www.nand2tetris.org
 // and the book "The Elements of Computing Systems"
 // by Nisan and Schocken, MIT Press.
@@ -11,26 +13,55 @@
 // parameter before this code starts running.
 
 function Main.fibonacci 0
-push argument 0
-push constant 2
-lt                     // checks if n<2
-if-goto IF_TRUE
-goto IF_FALSE
-label IF_TRUE          // if n<2, return n
-push argument 0        
-return
-label IF_FALSE         // if n>=2, returns fib(n-2)+fib(n-1)
-push argument 0
-push constant 2
-sub
-call Main.fibonacci 1  // computes fib(n-2)
-push argument 0
-push constant 1
-sub
-call Main.fibonacci 1  // computes fib(n-1)
-add                    // returns fib(n-1) + fib(n-2)
-return
+	push argument 0
+	push constant 2
+	lt                     // checks if n<2
+	if-goto IF_TRUE
+	goto IF_FALSE
+	label IF_TRUE          // if n<2, return n
+	push argument 0        
+	return
+	label IF_FALSE         // if n>=2, returns fib(n-2)+fib(n-1)
+	push argument 0
+	push constant 2
+	sub
+	call Main.fibonacci 1  // computes fib(n-2)
+	push argument 0
+	push constant 1
+	sub
+	call Main.fibonacci 1  // computes fib(n-1)
+	add                    // returns fib(n-1) + fib(n-2)
+	return
 
-function Sys.init 0
-push constant 16
-call Main.fibonacci 1   // computes the 16'th fibonacci element
+function Sys.init 1
+	push constant 16
+	call Main.fibonacci 1   // computes the 16'th fibonacci element
+
+	// This is a temporary workaround to printing
+	// the result without having a method to print numbers.
+
+	push constant 987  // Expected result
+	eq
+	not
+	if-goto sys_init_end
+
+	// Print the number 987
+	push constant 0
+	pop local 0
+	push local 0
+	pop pointer 0
+	push constant 57  // ASCII 9
+	pop this 0
+	push constant 56  // ASCII 8
+	pop this 1
+	push constant 55  // ASCII 7
+	pop this 2
+	push constant 3  // Length
+	push local 0  // Address
+	call Sys.print_hstr 2
+	pop constant 0
+
+	label sys_init_end
+
+	push constant 0
+	return

@@ -19,7 +19,7 @@ TEST_OBJECTS += $(filter-out $(BUILD_DIR)/main.o, $(OBJECTS))
 TEST_DEPS = $(TEST_OBJECTS:%.o=%.d)
 TEST_BINARY = $(TEST_BUILD_DIR)/vmtest
 
-.PHONY = all clean run test
+.PHONY = all clean run test examples
 
 all: $(BINARY)
 	@echo --- Build done ---
@@ -30,6 +30,10 @@ run: all
 test: CPPFLAGS = -D UNIT_TESTS
 test: $(TEST_BINARY)
 	./$(TEST_BINARY) $(args)
+
+examples: $(BINARY)
+	python3 $(TEST_SOURCE_DIR)/integration.py $(BINARY)
+
 
 
 $(BINARY): $(OBJECTS)

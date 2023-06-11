@@ -1,3 +1,5 @@
+// Test result: skip
+
 function Sys.init 0
 	// Read a line starting at heap[16].
 	push constant 16

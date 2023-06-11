@@ -1,3 +1,5 @@
+// Test result: skip
+
 function Sys.init 0
 	call Sys.read_char 0
 	call Sys.print 1

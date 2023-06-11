@@ -1,4 +1,4 @@
-function Sys.init 1
+function Sys.init 2
 	push constant 3
 	call prev_add 1
 	pop local 0
@@ -6,6 +6,29 @@ function Sys.init 1
 	call prev_add 1
 	push local 0
 	call mult 2
+
+	push constant 18  // Expected result
+	eq
+	not
+	if-goto sys_init_end
+
+	// Print the number 18
+	push constant 0
+	pop local 1
+	push local 1
+	pop pointer 0
+	push constant 49  // ASCII 1
+	pop this 0
+	push constant 56  // ASCII 8
+	pop this 1
+	push constant 2  // Length
+	push local 1  // Address
+	call Sys.print_hstr 2
+	pop constant 0
+
+	label sys_init_end
+
+	push constant 0
 	return
 
 // Result must be 18.

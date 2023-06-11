@@ -1,3 +1,5 @@
+// Test result: Hello, World!
+
 function Sys.init 0
 	push constant 72   // 'H'
 	call Sys.print 1
