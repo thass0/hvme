@@ -1,5 +1,5 @@
 #include "hvme.h"
-#include "err.h"
+#include "msg.h"
 #include "prog.h"
 #include "exec.h"
 

@@ -1,6 +1,5 @@
 #include "scan.h"
-#include "err.h"
-#include "warn.h"
+#include "msg.h"
 
 #include <fcntl.h>
 #include <stdlib.h>

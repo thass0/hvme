@@ -1,7 +1,7 @@
 #include "exec.h"
 #include "prog.h"
 #include "st.h"
-#include "err.h"
+#include "msg.h"
 #include "parse.h"
 
 #include <stdlib.h>

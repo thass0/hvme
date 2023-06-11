@@ -1,6 +1,5 @@
 #include "parse.h"
-#include "err.h"
-#include "warn.h"
+#include "msg.h"
 #include "st.h"
 
 #include <stdlib.h>

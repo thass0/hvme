@@ -1,7 +1,7 @@
 #include "prog.h"
 
 #include "scan.h"
-#include "warn.h"
+#include "msg.h"
 
 #include <assert.h>
 #include <string.h>
