@@ -630,7 +630,7 @@ static inline void exec_builtin_print(Stack* stack, Pos pos) {
   if (!spop(stack, &val))
     STACK_UNDERFLOW_ERROR(pos);
 
-  printf("%c", (char) val);
+  hvme_fprintf(stdout, "%c", (char) val);
 }
 
 static inline void exec_builtin_read_char(Stack* stack) {

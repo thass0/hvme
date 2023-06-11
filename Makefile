@@ -1,6 +1,6 @@
 CC = clang
 CFLAGS = -g -fsanitize=address -Werror -Wall -Wextra -pedantic-errors -std=gnu11
-LDFLAGS =  -lreadline -lm
+LDFLAGS =  -lm
 CPPFLAGS =
 
 BUILD_DIR = build

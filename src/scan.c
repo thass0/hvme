@@ -15,7 +15,6 @@ static Uint uilit = 0;
 static char ident_buf[MAX_IDENT_LEN + 1];
 
 #define TOKEN_COMPLETED -1
-
 #define INTERNAL_SCAN_ERR -1
 
 Tokens new_tokens(const char* filename) {
@@ -112,10 +111,11 @@ void token_str(const Token* it, char* str) {
   }
 }
 
+#define MAX_ERR_BLK_LEN 32
+
 void scan_err(const char* blk, const char* filename, Pos pos) {
   pos.filename = filename;
-  perrf(pos, "couldn't scan input\n"
-             " | %s", blk);
+  perrf(pos, "couldn't scan input\n `%s`", blk);
 }
 
 

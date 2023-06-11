@@ -5,6 +5,15 @@
 
 #include "scan.h"
 #include "st.h"
+#include <stdio.h>
+
+/* Print a format string. Using this function makes
+ * `clean_stdout` work. HVME internals should not use
+ * any other function to print something. */
+int hvme_fprintf(FILE *restrict stream, const char *restrict fmt, ...);
+
+/* `hvme_fprintf` counter part for non-literal strings. */
+int hvme_fputs(const char *restrict s, FILE *restrict stream);
 
 /* Flush stdout and add a newline if it's missing. */
 void clean_stdout(void);
