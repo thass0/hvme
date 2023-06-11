@@ -106,25 +106,17 @@ void token_str(const Token* it, char* str) {
     // `uilit` is a 16-bit unsigned integer which
     // means it will never be more that 5 digits long.
     snprintf(str, TOKEN_STR_BUF, "%d", it->uilit);
+  } else if (it->t == TK_IDENT) {
+    snprintf(str, TOKEN_STR_BUF, "%s (ident)", it->ident);
   } else {
     snprintf(str, TOKEN_STR_BUF, "%s", strs[it->t]);
   }
 }
 
 void scan_err(const char* blk, const char* filename, Pos pos) {
-  if (filename == NULL) {
-    errf(
-      "couldn't scan input\n"
-      " %d:%d | %s",
-      pos.ln + 1, pos.cl + 1, blk
-    );
-  } else {
-    errf(
-      "couldn't scan input (%s)\n"
-      " %d:%d | %s",
-      filename, pos.ln + 1, pos.cl + 1, blk
-    );
-  }
+  pos.filename = filename;
+  perrf(pos, "couldn't scan input\n"
+             " | %s", blk);
 }
 
 

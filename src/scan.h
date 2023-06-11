@@ -53,13 +53,13 @@ typedef enum {
 // Length of longest possible token is 8 (`argument`/`constant`).
 // The largest possible 16-bit number only has
 // floor(log10(65535)) + 1 = 5 digits.
-// This length is therefore dicated by `MAX_IDENTLEN`
+// This length is therefore dicated by `MAX_IDENT_LEN`
 # define MAX_TOKEN_LEN MAX_IDENT_LEN
 # endif
 
 # ifndef TOKEN_STR_BUF
 // Size of char buffer for `token_str`.
-# define TOKEN_STR_BUF (MAX_TOKEN_LEN + 1)
+# define TOKEN_STR_BUF (MAX_TOKEN_LEN  + 9)
 # endif
 
 typedef uint16_t Uint;

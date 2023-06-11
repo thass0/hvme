@@ -708,7 +708,8 @@ int exec_prog(Program* prog) {
         break;
       default: {
         INST_STR(str, &active_inst(prog));
-        errf("invalid inststruction `%s`; programmer mistake", str);
+        perrf(active_inst(prog).pos,
+          "invalid inststruction `%s`; programmer mistake", str);
         return EXEC_ERR;
       }
     }

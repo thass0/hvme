@@ -16,60 +16,70 @@ static inline Tokens setup_tokens(Token* token_arr, size_t len) {
 
 TEST(correct_parse_errors) {
   {
-    Token it[] = {{.t=TK_PUSH}, {.t=TK_CONST, .pos={.ln=0, .cl=5}}};
-    Tokens tokens = setup_tokens(it, 2);
+    Token tk_arr[] = {{.t=TK_PUSH}, {.t=TK_CONST, .pos={.ln=0, .cl=5}}};
+    Tokens tokens = setup_tokens(tk_arr, 2);
     Insts insts = new_insts(NULL);
     int parse_res = parse(&tokens, &insts, NULL);
     assert_int(parse_res, ==, PARSE_ERR);
     del_insts(insts);
     assert_int(check_stream(
  "wrong token, expected an offset\n"
- " 1:15 | push constant ???\n"
- " 2:15 |               ^^^",  16, stderr), ==, 1);
+ " | push constant ???\n"
+ " |               ^^^",  36, stderr), ==, 1);
   } {
-    Token it[] = {{.t=TK_PUSH}, {.t=TK_LOC}, {.t=TK_ARG, .pos={.ln=0, .cl=11}}};
-    Tokens tokens = setup_tokens(it, 3);
+    Token tk_arr[] = {{.t=TK_PUSH}, {.t=TK_LOC}, {.t=TK_ARG, .pos={.ln=0, .cl=11}}};
+    Tokens tokens = setup_tokens(tk_arr, 3);
     Insts insts = new_insts(NULL);
     int parse_res = parse(&tokens, &insts, NULL);
     assert_int(parse_res, ==, PARSE_ERR);
     del_insts(insts);
     assert_int(check_stream(
  "wrong token, expected an offset\n"
- " 1:12 | push local argument\n"
- " 2:12 |            ^^^^^^^^",  16, stderr), ==, 1);
+ " | push local argument\n"
+ " |            ^^^^^^^^",  36, stderr), ==, 1);
   } {
-    Token it[] = {{.t=TK_PUSH}, {.t=TK_LOC}, {.t=TK_ARG, .pos={.ln=0, .cl=11}}, {.t=TK_CONST}, {.t=TK_LOC}};
-    Tokens tokens = setup_tokens(it, 3);
+    Token tk_arr[] = {{.t=TK_PUSH}, {.t=TK_LOC}, {.t=TK_ARG, .pos={.ln=0, .cl=11}}, {.t=TK_CONST}, {.t=TK_LOC}};
+    Tokens tokens = setup_tokens(tk_arr, 3);
     Insts insts = new_insts(NULL);
     int parse_res = parse(&tokens, &insts, NULL);
     assert_int(parse_res, ==, PARSE_ERR);
     del_insts(insts);
     assert_int(check_stream(
  "wrong token, expected an offset\n"
- " 1:12 | push local argument\n"
- " 2:12 |            ^^^^^^^^",  16, stderr), ==, 1);
+ " | push local argument\n"
+ " |            ^^^^^^^^",  36, stderr), ==, 1);
   } {
-    Token it[] = {{.t=TK_PUSH}};
-    Tokens tokens = setup_tokens(it, 1);
+    Token tk_arr[] = {{.t=TK_PUSH}};
+    Tokens tokens = setup_tokens(tk_arr, 1);
     Insts insts = new_insts(NULL);
     int parse_res = parse(&tokens, &insts, NULL);
     assert_int(parse_res, ==, PARSE_ERR);
     del_insts(insts);
     assert_int(check_stream(
  "wrong token, expected a segment\n"
- " 1:6 | push ??? ???\n"
- " 2:6 |      ^^^",  16, stderr), ==, 1);
+ " | push ??? ???\n"
+ " |      ^^^",  36, stderr), ==, 1);
   } {
-    Token it[] = {{.t=TK_PUSH}, {.t=TK_POP, .pos={.ln=0, .cl=5}}, {.t=TK_PUSH}};
-    Tokens tokens = setup_tokens(it, 3);
+    Token tk_arr[] = {{.t=TK_PUSH}, {.t=TK_POP, .pos={.ln=0, .cl=5}}, {.t=TK_PUSH}};
+    Tokens tokens = setup_tokens(tk_arr, 3);
     Insts insts = new_insts(NULL);
     int parse_res = parse(&tokens, &insts, NULL);
     assert_int(parse_res, ==, PARSE_ERR);
     del_insts(insts);
     assert_int(check_stream(
  "wrong token, expected a segment\n"
- " 1:6 | push pop ???\n"
- " 2:6 |      ^^^",  16, stderr), ==, 1);
+ " | push pop ???\n"
+ " |      ^^^",  36, stderr), ==, 1);
+  } {
+    Token tk_arr[] = {{.t=TK_IDENT, .ident="blah"}, {.t=TK_ARG}};
+    Tokens tokens = setup_tokens(tk_arr, 2);
+    Insts insts = new_insts(NULL);
+    int parse_res = parse(&tokens, &insts, NULL);
+    assert_int(parse_res, ==, PARSE_ERR);
+    del_insts(insts);
+    assert_int(check_stream(
+ "wrong start of instruction\n"
+ " | blah (ident)",  36, stderr), ==, 1);
   }
   return MUNIT_OK;
 }
@@ -134,57 +144,57 @@ TEST(parse_valid_insts) {
 
 TEST(reject_segments_start) {
 {
-  Token it[] = {{ .t=TK_ARG }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_ARG }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_LOC }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_LOC }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_STAT }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_STAT }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_CONST }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_CONST }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_THIS }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_THIS }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_THAT }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_THAT }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_PTR }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_PTR }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {
-  Token it[] = {{ .t=TK_TMP }};
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[] = {{ .t=TK_TMP }};
+  Tokens tokens = setup_tokens(tk_arr, 1);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
@@ -194,8 +204,8 @@ TEST(reject_segments_start) {
 }
 
 TEST(reject_offsets_start) {
-  Token it[1];
-  Tokens tokens = setup_tokens(it, 1);
+  Token tk_arr[1];
+  Tokens tokens = setup_tokens(tk_arr, 1);
   for (int i = 0; i < 20; i++) {
     tokens.cell[0] = (Token) { .t=TK_UINT, .uilit=RAND_OFFSET() };
     Insts insts = new_insts(NULL);
@@ -209,22 +219,22 @@ TEST(reject_offsets_start) {
 
 TEST(reject_incomplete_mem)  {
 {  // Mem and segment followed by another instruction.
-  Token it[] = {{ .t=TK_PUSH }, { .t=TK_CONST }, { .t=TK_ADD }};
-  Tokens tokens = setup_tokens(it, 3);
+  Token tk_arr[] = {{ .t=TK_PUSH }, { .t=TK_CONST }, { .t=TK_ADD }};
+  Tokens tokens = setup_tokens(tk_arr, 3);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {  // Mem followed by an offset withtout a segment.
-  Token it[] = {{ .t=TK_POP }, { .t=TK_UINT, .uilit=RAND_OFFSET()}};
-  Tokens tokens = setup_tokens(it, 2);
+  Token tk_arr[] = {{ .t=TK_POP }, { .t=TK_UINT, .uilit=RAND_OFFSET()}};
+  Tokens tokens = setup_tokens(tk_arr, 2);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
   del_insts(insts);
 } {  // Mem followed by another instruction
-  Token it[] = {{ .t=TK_POP }, { .t=TK_EQ }};
-  Tokens tokens = setup_tokens(it, 2);
+  Token tk_arr[] = {{ .t=TK_POP }, { .t=TK_EQ }};
+  Tokens tokens = setup_tokens(tk_arr, 2);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
@@ -234,8 +244,8 @@ TEST(reject_incomplete_mem)  {
 }
 
 TEST(reject_premature_end) {
-  Token it[] = {{ .t=TK_POP }, { .t=TK_LOC }};
-  Tokens tokens = setup_tokens(it, 2);
+  Token tk_arr[] = {{ .t=TK_POP }, { .t=TK_LOC }};
+  Tokens tokens = setup_tokens(tk_arr, 2);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, NULL);
   assert_int(parse_res, ==, PARSE_ERR);
@@ -245,7 +255,7 @@ TEST(reject_premature_end) {
 
 TEST(parse_fills_st) {
   SymbolTable st = new_st();
-  Token it[] = {
+  Token tk_arr[] = {
     {.t=TK_PUSH},
     {.t=TK_CONST},
     {.t=TK_UINT, .uilit=RAND_OFFSET()},
@@ -257,7 +267,7 @@ TEST(parse_fills_st) {
     {.t=TK_LABEL},
     {.t=TK_IDENT, .ident="another_ident"},
   };
-  Tokens tokens = setup_tokens(it, 10);
+  Tokens tokens = setup_tokens(tk_arr, 10);
   Insts insts = new_insts(NULL);
   int parse_res = parse(&tokens, &insts, &st);
   assert_int(parse_res, ==, PARSE_OK);

@@ -155,32 +155,22 @@ void print_expect3_err(TokenStream its, const char* expectation, const char* fil
   assert(pointer != NULL);
   memset(pointer, '^', strlen(self));
 
-  Token display_it = *it;
-  if (display_it.t == TK_NONE) {
-    // Correct the position in none tokens.
-    display_it.pos.cl = strlen(second) + second_it->pos.cl + 1;
-    display_it.pos.ln = second_it->pos.ln;
+  Pos display_pos = it->pos;
+  if (it->t == TK_NONE) {
+    /* Correct the position in none tokens. */
+    display_pos.cl = strlen(second) + second_it->pos.cl + 1;
+    display_pos.ln = second_it->pos.ln;
   }
+  display_pos.filename = filename;
 
-  if (filename == NULL) {
-    errf(
-      "wrong token, expected %s\n"
-      " %d:%d | %s %s %s\n"  // <- Scanned instruction.
-      " %d:%d | %s %s %s",  // <- Error marker.
-      expectation,
-      display_it.pos.ln + 1, display_it.pos.cl + 1, first, second, self,
-      display_it.pos.ln + 2, display_it.pos.cl + 1, first_spacer, second_spacer, pointer
-    );
-  } else {
-    errf(
-      "wrong token, expected %s (%s)\n"
-      " %d:%d | %s %s %s\n"  // <- Scanned instruction.
-      " %d:%d | %s %s %s",  // <- Error marker.
-      expectation, filename,
-      display_it.pos.ln + 1, display_it.pos.cl + 1, first, second, self,
-      display_it.pos.ln + 2, display_it.pos.cl + 1, first_spacer, second_spacer, pointer
-    );
-  }
+  perrf(display_pos,
+    "wrong token, expected %s\n"
+    " | %s %s %s\n"  // <- Scanned instruction.
+    " | %s %s %s",  // <- Error marker.
+    expectation,
+    first, second, self,
+    first_spacer, second_spacer, pointer
+  );
 
   free(first_spacer);
   free(second_spacer);
@@ -210,28 +200,24 @@ void print_expect2_err(TokenStream its, const char* expectation, const char* fil
     display_it.pos.cl = prev_it->pos.cl + strlen(prev) + 1;
     display_it.pos.ln = prev_it->pos.ln;
   }
+  Pos display_pos = it->pos;
+  if (it->t == TK_NONE) {
+    /* Correct the position in none tokens. */
+    display_pos.cl = prev_it->pos.cl + strlen(prev) + 1;
+    display_pos.ln = prev_it->pos.ln;
+  }
+  display_pos.filename = filename;
 
   TOKEN_STR(next, its_next(&its));
 
-  if (filename == NULL) {
-    errf(
-      "wrong token, expected %s\n"
-      " %d:%d | %s %s %s\n"  // <- Scanned instruction.
-      " %d:%d | %s %s",  // <- Error marker.
-      expectation,
-      display_it.pos.ln + 1, display_it.pos.cl + 1, prev, self, next,
-      display_it.pos.ln + 2, display_it.pos.cl + 1, spacer, pointer
-    );
-  } else {
-    errf(
-      "wrong token, expected %s (%s)\n"
-      " %d:%d | %s %s %s\n"  // <- Scanned instruction.
-      " %d:%d | %s %s",  // <- Error marker.
-      expectation, filename,
-      display_it.pos.ln + 1, display_it.pos.cl + 1, prev, self, next,
-      display_it.pos.ln + 2, display_it.pos.cl + 1, spacer, pointer
-    );
-  }
+  perrf(display_pos,
+    "wrong token, expected %s\n"
+    " | %s %s %s\n"  // <- Scanned instruction.
+    " | %s %s",  // <- Error marker.
+    expectation,
+    prev, self, next,
+    spacer, pointer
+  );
 
   free(spacer);
   free(pointer);
@@ -239,33 +225,9 @@ void print_expect2_err(TokenStream its, const char* expectation, const char* fil
 
 void print_token_err(const Token* it, const char* filename) {
   TOKEN_STR(it_str, it);
-  /*
-  TODO:
-  ```
-  (vme) clear
-  Error: wrong start of instruction
-   1:1 | ident
-  ```
-  Change the above to look like this:
-  ```
-  (vme) clear
-  Error: wrong start of instruction
-   1:1 | clear (identifier)
-  ```
-  */
-  if (filename == NULL) {
-    errf(
-      "wrong start of instruction\n"
-      " %d:%d | %s",
-      it->pos.ln + 1, it->pos.cl + 1, it_str
-    );
-  } else {
-    errf(
-      "wrong start of instruction (%s)\n"
-      " %d:%d | %s",
-      filename, it->pos.ln + 1, it->pos.cl + 1, it_str
-    );
-  }
+  Pos pos = it->pos;
+  pos.filename = filename;
+  perrf(pos, "wrong start of instruction\n | %s", it_str);
 }
 
 void print_ident_err(TokenStream its, const char* filename) {
@@ -281,31 +243,21 @@ void print_ident_err(TokenStream its, const char* filename) {
   assert(pointer != NULL);
   memset(pointer, '^', strlen(no_id_str));
 
-  Token display_it = *no_ident;
-  if (display_it.t == TK_NONE) {
-    // Correct the position in none tokens.
-    display_it.pos.cl = strlen(ctrlflow_str) + ctrlflow_it->pos.cl + 1;
-    display_it.pos.ln = ctrlflow_it->pos.ln;
+  Pos display_pos = no_ident->pos;
+  if (no_ident->t == TK_NONE) {
+    /* Correct the position in none tokens. */
+    display_pos.cl = strlen(ctrlflow_str) + ctrlflow_it->pos.cl + 1;
+    display_pos.ln = ctrlflow_it->pos.ln;
   }
+  display_pos.filename = filename;
 
-  if (filename == NULL) {
-    errf(
-      "wrong token, expected an identifier\n"
-      " %d:%d | %s %s\n"  // <- Scanned instruction.
-      " %d:%d | %s %s",  // <- Error marker.
-      display_it.pos.ln + 1, display_it.pos.cl + 1, ctrlflow_str, no_id_str,
-      display_it.pos.ln + 2, display_it.pos.cl + 1, ctrlflow_spacer, pointer
-    );
-  } else {
-    errf(
-      "wrong token, expected an identifier (%s)\n"
-      " %d:%d | %s %s\n"  // <- Scanned instruction.
-      " %d:%d | %s %s",  // <- Error marker.
-      filename,
-      display_it.pos.ln + 1, display_it.pos.cl + 1, ctrlflow_str, no_id_str,
-      display_it.pos.ln + 2, display_it.pos.cl + 1, ctrlflow_spacer, pointer
-    );
-  }
+  perrf(display_pos,
+    "wrong token, expected an identifier\n"
+    " | %s %s\n"  // <- Scanned instruction.
+    " | %s %s",  // <- Error marker.
+    ctrlflow_str, no_id_str,
+    ctrlflow_spacer, pointer
+  );
 
   free(ctrlflow_spacer);
   free(pointer);
