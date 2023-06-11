@@ -19,6 +19,9 @@ typedef struct {
   char ident[MAX_IDENT_LEN + 1];
 } SymKey;
 
+/* Return the name of the given key type. */
+const char* key_type_name(SymKeyType type);
+
 typedef struct {
   // Instruction address in `Insts`.
   size_t inst_addr;

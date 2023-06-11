@@ -3,6 +3,14 @@
 #include <math.h>
 #include <string.h>
 
+const char* key_type_name(SymKeyType type) {
+  switch (type) {
+    case SBT_LABEL: return "label";
+    case SBT_FUNC: return "function";
+    case SBT_UNUSED: return "unused symbol";
+  }
+}
+
 SymbolTable new_st(void) {
   SymbolTable st = {
     .len = ST_BLOCK_SIZE + 1,  // Adding `1` is required so that

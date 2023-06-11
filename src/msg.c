@@ -125,15 +125,9 @@ void warn_no_st(const SymKey* key, const SymVal* val) {
   assert(key != NULL);
   assert(val != NULL);
 
-  const char* type_name;
-  switch (key->type) {
-    case SBT_LABEL: type_name = "label"; break;
-    case SBT_FUNC: type_name = "function"; break;
-    case SBT_UNUSED: type_name = "unused symbol"; break;
-  }
   init_warn();
   fprintf(stderr, "symbol table doesn't exists.\n");
   hint_indicator();
-  fprintf(stderr, "Can't enter %s `%s` pointing to instruction %lu\n",
-    type_name, key->ident, val->inst_addr);
+  fprintf(stderr, "Can't enter %s `%s` starting at instruction %lu\n",
+    key_type_name(key->type), key->ident, val->inst_addr + 1);
 }

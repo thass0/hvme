@@ -132,6 +132,14 @@ TokenStream its_slice(TokenStream* its, size_t ol, size_t or) {
   };
 }
 
+void print_multi_def_err(SymKey* key, SymVal* val, Pos pos, const char* filename) {
+  pos.filename = filename;
+  perrf(pos,
+    "multiple definitions of the same %s.\n"
+    "  Won't enter `%s` starting at instruction %lu",
+    key_type_name(key->type), key->ident, val->inst_addr + 1);
+}
+
 void print_expect3_err(TokenStream its, const char* expectation, const char* filename) {
   assert(expectation != NULL);
 
@@ -350,14 +358,18 @@ static inline int label_meta(TokenStream* its, SymbolTable* st, size_t num_inst,
   
   // This function is only called if the return value
   // of this call is `TK_LABEL`.
-  its_next(its);
+  Pos pos = its_next(its)->pos;
 
   if (its_lh(its)->t == TK_IDENT) {
     const char* ident = its_next(its)->ident;
     SymKey key = mk_key(ident, SBT_LABEL);
     SymVal val = mk_lbval(num_inst);
-    if (st != NULL)
-      insert_st(st, key, val);
+    if (st != NULL) {
+      if (insert_st(st, key, val) == INRES_EXISTS)  {
+        print_multi_def_err(&key, &val, pos, filename);
+        return PARSE_ERR;
+      }
+    }
     else
       warn_no_st(&key, &val);
   } else {
@@ -376,7 +388,8 @@ static inline int function_inst(
 ) {
   assert(its != NULL);
 
-  its_next(its);  // Consume `TK_FUNC`
+  /* Consume `TK_FUNC` only keeping the position. */
+  Pos pos = its_next(its)->pos;
 
   const char* ident = NULL;
 
@@ -402,8 +415,12 @@ static inline int function_inst(
   SymKey key = mk_key(ident, SBT_FUNC);
   SymVal val = mk_fnval(num_inst, nlocals);
 
-  if (st != NULL)
-    insert_st(st, key, val);
+  if (st != NULL) {
+    if (insert_st(st, key, val) == INRES_EXISTS)  {
+      print_multi_def_err(&key, &val, pos, filename);
+      return PARSE_ERR;
+    }
+  }
   else
     warn_no_st(&key, &val);
 

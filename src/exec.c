@@ -79,6 +79,12 @@ static jmp_buf exec_env;
   perr((pos), "system line read failed."); \
   longjmp(exec_env, EXEC_ERR);             \
 }
+#define DEF_ERR(key, pos) {                        \
+  perrf((pos), "can't jump to %s %s because it's " \
+    "defined multiple times",                      \
+    key_type_name((key).type), (key).ident);       \
+  longjmp(exec_env, EXEC_ERR);                     \
+}
 
 void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
   assert(stack != NULL);
@@ -411,6 +417,7 @@ static inline void exec_gt(Stack* stack, Pos pos) {
 
 #define JMP_OK 1
 #define JMP_ERR 0
+#define JMP_MULT_DEF -1
 
 static int jump_to(Program* prog, SymKey key, SymVal* val) {
   assert(prog != NULL);
@@ -424,23 +431,39 @@ static int jump_to(Program* prog, SymKey key, SymVal* val) {
     return JMP_OK;
   } else {
     unsigned int prev_fi = prog->fi;
-    GetResult get_res;
-
+    unsigned int next_ei_buf = 0;
+    unsigned int next_fi_buf = 0;
+    unsigned int ndefs = 0;
     for (unsigned int next_fi = 0; next_fi < prog->nfiles; next_fi++) {
       /* Don't re-check the active file. */
       if (prev_fi != next_fi) {
-        get_res = get_st(prog->files[next_fi].st, &key, val);
-        if (get_res == GTRES_OK) {
-          prog->fi = next_fi;  /* Change the file we are in. */
-          active_file(prog).ei = val->inst_addr - 1;
-          break;
+        if (get_st(prog->files[next_fi].st, &key, val) == GTRES_OK) {
+          /* Copy new position values for later. */
+          next_fi_buf = next_fi;
+          next_ei_buf = val->inst_addr - 1;
+          /* Continue if we just found the first definition
+           * or break if there are multiple definitions. */
+          ndefs++;
+          if (ndefs > 1) break;
         }
       }
     }
 
-    return get_res == GTRES_ERR
-      ? JMP_ERR
-      : JMP_OK;
+    /* How many definitions did we find? */
+    switch (ndefs) {
+      case 0:
+        /* The function doesn't exist anywhere. */
+        return JMP_ERR;
+      case 1:
+        /* We found the one definition we need.
+         * Go there! */
+        prog->fi             = next_fi_buf;
+        active_file(prog).ei = next_ei_buf;
+        return JMP_OK;
+      default:
+        /* There is more than one definition. */
+        return JMP_MULT_DEF;
+    }
   }
 }
 
@@ -452,9 +475,18 @@ static inline void exec_goto(Program* prog, Pos pos) {
     active_file(prog).insts.cell[active_file(prog).ei].ident,
     SBT_LABEL
   );
-  if (!jump_to(prog, key, &val))
-    CTRL_FLOW_ERROR(key.ident, pos);
-  /* Else everything went well. */
+
+  switch (jump_to(prog, key, &val)) {
+    case JMP_ERR:
+      CTRL_FLOW_ERROR(key.ident, pos);
+      break;
+    case JMP_MULT_DEF:
+      DEF_ERR(key, pos);
+      break;
+    default:
+      /* Else: everything went well. */
+      break;
+  }
 }
 
 static inline void exec_if_goto(Program* prog, Pos pos) {
@@ -473,10 +505,19 @@ static inline void exec_if_goto(Program* prog, Pos pos) {
       SBT_LABEL
     );
 
-    if (!jump_to(prog, key, &val)) {
-      /* Restore poping `val` off the stack. */
-      prog->stack.sp ++;
-      CTRL_FLOW_ERROR(key.ident, pos);
+    /* `val` is restored on error. */
+    switch (jump_to(prog, key, &val)) {
+      case JMP_ERR:
+        prog->stack.sp ++;
+        CTRL_FLOW_ERROR(key.ident, pos);
+        break;
+      case JMP_MULT_DEF:
+        prog->stack.sp ++;
+        DEF_ERR(key, pos);
+        break;
+      default:
+        /* Else: everything went well. */
+        break;
     }
   }
 }
@@ -497,8 +538,17 @@ static inline void exec_call(Program* prog, Pos pos) {
 
   SymVal val;
   SymKey key = mk_key(ident, SBT_FUNC);
-  if (!jump_to(prog, key, &val))
-    CTRL_FLOW_ERROR(ident, pos);
+  switch (jump_to(prog, key, &val)) {
+    case JMP_ERR:
+      CTRL_FLOW_ERROR(key.ident, pos);
+      break;
+    case JMP_MULT_DEF:
+      DEF_ERR(key, pos);
+      break;
+    default:
+      /* Else: everything went well. */
+      break;
+  }
 
   // Push return execution index on the stack.
   spush(stack, (Word) ret_ei);
