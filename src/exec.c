@@ -101,8 +101,10 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
         // (same with loc).
         offset + stack->arg < stack->sp
       ) {
-        if (!spop(stack, &stack->ops[offset + stack->arg]))
+        Word arg_buf;
+        if (!spop(stack, &arg_buf))
           STACK_UNDERFLOW_ERROR(inst.pos);
+        stack->ops[offset + stack->arg] = arg_buf;
       } else {
         if (offset >= stack->arg_len) {
           SEG_OVERFLOW_ERROR(&inst, stack->arg_len);
@@ -116,8 +118,10 @@ void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
         offset < stack->lcl_len &&
         offset + stack->lcl < stack->sp
       ) {
-        if (!spop(stack, &stack->ops[offset + stack->lcl]))
+        Word lcl_buf;
+        if (!spop(stack, &lcl_buf))
           STACK_UNDERFLOW_ERROR(inst.pos);
+        stack->ops[offset + stack->lcl] = lcl_buf;
       } else {
         if (offset >= stack->lcl_len) {
           SEG_OVERFLOW_ERROR(&inst, stack->lcl_len);
@@ -603,8 +607,18 @@ void exec_ret(Program* prog, Pos pos) {
   // `ARG` always points to the first argument
   // pushed on the stack by the caller. This is
   // where the caller will expect the return value.
-  if (!spop(stack, &stack->ops[stack->arg]))
+  // We need to get the return value as a two step
+  // operation because `spop` might change the location
+  // of `stack->ops` which would result in a use after
+  // free error if a pointer to a value on the stack
+  // were passed to `spop` as `val`.
+  Word ret_val;
+  if (!spop(stack, &ret_val)) {
     STACK_UNDERFLOW_ERROR(pos);
+  }
+  // Insert the return value at the position
+  // where the caller will expect it.
+  stack->ops[stack->arg] = ret_val;
 
   stack->sp = stack->arg + 1;
   // Restore the rest of the registers which

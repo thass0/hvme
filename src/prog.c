@@ -38,6 +38,9 @@ void spush(Stack* stack, Word val) {
   stack->sp ++;
 }
 
+/* NOTE: It is forbidden to use a pointer into `stack->ops`
+ * as `val` because this might cause a use after free error
+ * if `realloc` changes the location of `stack->ops`. */
 int spop(Stack* stack, Word* val) {
   assert(stack != NULL);
   assert(val != NULL);

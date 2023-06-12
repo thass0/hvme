@@ -31,6 +31,7 @@ test: CPPFLAGS = -D UNIT_TESTS
 test: $(TEST_BINARY)
 	./$(TEST_BINARY) $(args)
 
+examples: CPPFLAGS = -D UNIT_TESTS
 examples: $(BINARY)
 	python3 $(TEST_SOURCE_DIR)/integration.py $(BINARY)
 
