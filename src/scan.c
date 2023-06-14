@@ -468,29 +468,25 @@ ssize_t scan_blk(Tokens* tokens, const char* blk, size_t len) {
   // Remember whether we left inside a comment.
   static int inside_comment = 0;
 
-  // Eat up initial whitespace.
-  eat_ws(blk, len, &offset, &tokens->cur);
-
   while (offset < len) {
     // `offset` now points to the first
     // character in a new line of content.
 
-    // Eat comments.
+    // Eat comments. Newline check must happen
+    // before starting whitespace is consumed.
     if (inside_comment) {
       if (blk[offset] == '\n') {
         inside_comment = 0;
         incl(&offset, &tokens->cur);
-        // Now that we've set `inside_comment` false we
-        // are going to begin a new iteration where we
-        // scan actual content. This requires that initial
-        // whitespace is scanned first.
-        eat_ws(blk, len, &offset, &tokens->cur);
       } else {
         inc(&offset, &tokens->cur);
       }
 
       continue;
     }
+
+    // Eat up initial whitespace.
+    eat_ws(blk, len, &offset, &tokens->cur);
 
     int num_matched = 0;
     size_t fn_idx = 0;

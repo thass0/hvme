@@ -50,7 +50,8 @@ def run_test(files):
             print(f'Ok   {files}')
         else:
             print(f'Err  {files}, {stdout} != {test_res}')
-            print(f' ({res.stderr.strip()})')
+            print(f'    Stderr `{res.stderr.strip()}`')
+            print(f'    Stdout `{res.stdout.strip()}`')
 
 with os.scandir(BASE_PATH) as entries:
     for entry in entries:

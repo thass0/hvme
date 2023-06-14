@@ -12,8 +12,10 @@ int run_hvme(int argc, const char* argv[]) {
     return 1;
   } else {
     Program* prog = make_prog(argc - 1, argv + 1);
-    if (prog == NULL)
+    if (prog == NULL) {
+      hvme_fputs("Failed to compile source.", stderr);
       return 1;
+    }
 
     int ret = exec_prog(prog);
     del_prog(prog);

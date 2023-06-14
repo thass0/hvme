@@ -11,7 +11,7 @@ static char last_stdout = '\0';
 
 #define PRINT_BUF_SIZE 1024
 
-int hvme_fputs(const char *restrict s, FILE* restrict stream) {
+int hvme_fputs(const char *restrict s, FILE *restrict stream) {
   int len = strlen(s);
   if (stream == stdout) {
     last_stdout = s[len > 0 ? len - 1 : '\0'];

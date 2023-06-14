@@ -117,8 +117,8 @@ void token_str(const Token* it, char* str);
 #    define SCAN_BLOCK_SIZE MAX_TOKEN_LEN
 #  else
 #    define SCAN_BLOCK_SIZE 0x10000
-#  endif
-# endif
+#  endif  // UNIT_TESTS
+# endif  // SCAN_BLOCK_SIZE
 
 #define SCAN_ERR 0
 #define SCAN_OK 1
