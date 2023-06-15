@@ -2,8 +2,8 @@
 
 This is a virtual machine emulator for the *Hack* Virtual
 Machine as specified in [*The Elements of Computing Systems*](https://www.nand2tetris.org/)
-which run directly on your machine instead of compiling to
-their assembly.
+which runs directly on your machine instead of compiling to
+*Hack* assembly.
 
 ## Try it out
 
@@ -30,12 +30,12 @@ The *Hack* VM specification assumes that VM code is compiled down to
 binary code which runs on the *physical* (the computer they're
 talking about doesn't really exist) machine. There, I/O works by
 writing and reading from the screen and keyboard memory maps (which
-are not yet implemented).
+are not yet implemented TBH).
 
-The downside of this approach is that it quickly becomes annoying
+The downside of this approach is that it's very annoying
 to be limited to such primitive forms of I/O while actually running
 on a *real* computer all the time. This is why I decided to add
-a basic API which can be used to just use standard I/O.
+a basic API to just use standard I/O.
 
 It's defined as a set of *HVM* functions which are available by
 default to any program. While those functions are not actually
@@ -43,6 +43,7 @@ implemented using *HVM* they look and feel just like native
 functions and thereby don't extend the core language.
 
 **Right now, you can use the following I/O functions.**
+Checkout the `examples/` to get an idea of how to use them.
 
   - `Sys.print_char(ch) -> 0`: prints the given character.
 
@@ -75,4 +76,3 @@ this:
   /           \ /   \  /   \     /     \
   function_name(arg_1, arg_2) -> ret_val
 ```
-
