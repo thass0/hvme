@@ -1,6 +1,6 @@
-// Test result: skip
+// Test result: io -> c:c
 
 function Sys.init 0
 	call Sys.read_char 0
-	call Sys.print 1
+	call Sys.print_char 1
 	return

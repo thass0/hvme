@@ -128,100 +128,135 @@ void add_bii(Insts* insts, Inst add) {
   insts->idx ++;
 }
 
-void builtin_print(File* file) {
+/* NOTE: On adding another builtin.
+ * Builtins work by defining an internal instructions which
+ * implements the desired function and exposing it wrapped
+ * in a regular function. To add a new one changes have to
+ * be made in the following files.
+ *
+ *   1. Add the wrapping function to the
+ *      system functions here (`src/prog.c`).
+ *   2. Add the new internal instruction to `InstCode`
+ *      in `src/parse.h`.
+ *   3. Add the builtin's name to `inst_str` in `src/parse.c`.
+ *   4. Add a `case NEW_BUILTIN` to `exec_prog` which
+ *      executes the builtin's implementation in `src/exec.c`.
+ *
+ */
+
+void builtin_print_char(File* file) {
   assert(file != NULL);
 
+  /*
+   * `Sys.print_char (c) -> 0`
+   * prints the given character.
+   */
+
   insert_st(&file->st,
-    mk_key("Sys.print", SBT_FUNC),
+    mk_key("Sys.print_char", SBT_FUNC),
     mk_fnval(file->insts.idx, 0));
 
-  /* `Sys.print` receives a single argument which
-   * is an ASCII code point to be displayed. */
-
-  // Call the builtin with the ASCII value as the argument.
   add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 }});
-  add_bii(&file->insts, (Inst) { .code=BUILTIN_PRINT });
-  // Push `0` as return code and return.
-  add_bii(&file->insts,  (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_PRINT_CHAR });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
   add_bii(&file->insts, (Inst) { .code=RET });
 }
 
-void builtin_print_hstr(File* file) {
+void builtin_print_num(File* file) {
   assert(file != NULL);
 
-  insert_st(&file->st,
-    mk_key("Sys.print_hstr", SBT_FUNC),
-    mk_fnval(file->insts.idx, 2));
+  /*
+   * `Sys.print_num (num) -> 0`
+   * prints the given number as an unsigned integer.
+   */
 
-  /* `Sys.print_hstr (nchars, addr) -> 0` will
-   * print a character array of length `nchars`. */ 
-
-  // Copy `nchars` into counter
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=0 } });
-  // Copy `addr` into pointer.
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=1 } });
-  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=1 } });
-  // Print loop.
   insert_st(&file->st,
-    mk_key("SYS_PRINT_HEAP_STR_LOOP", SBT_LABEL),
-    mk_lbval(file->insts.idx));
-  // Print current char.
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=1 } });
-  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=PTR, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=THIS, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=CALL, .ident="Sys.print", .nargs=1 });
-  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=CONST, .offset=0 } });  // Delete return value.
-  // Advance pointer
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=1 } });
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=1 } });
-  add_bii(&file->insts, (Inst) { .code=ADD });
-  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=1 } });
-  // Decrease counter and conditionally repeat.
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=1 } });
-  add_bii(&file->insts, (Inst) { .code=SUB });
-  add_bii(&file->insts, (Inst) { .code=POP, .mem={ .seg=LOC, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=LOC, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 } });
-  add_bii(&file->insts, (Inst) { .code=GT });
-  add_bii(&file->insts, (Inst) { .code=IF_GOTO, .ident="SYS_PRINT_HEAP_STR_LOOP" });
-  // Return (nothing)
-  add_bii(&file->insts,  (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
+    mk_key("Sys.print_num", SBT_FUNC),
+    mk_fnval(file->insts.idx, 0));
+
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 }});
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_PRINT_NUM });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
   add_bii(&file->insts, (Inst) { .code=RET });
 }
 
-void builtin_read_line(File* file) {
+void builtin_print_str(File* file) {
   assert(file != NULL);
 
-  /* `Sys.read_line(addr) -> nchars` reads a line
-   * and stores it on heap starting at `addr`. The
-   * number of chars stored is returned. */
+  /*
+   * `Sys.print_str (nchars, addr) -> 0`
+   * prints a character array of length `nchars`.
+   * `nchars` is placed on stack below `addr`.
+   */
 
   insert_st(&file->st,
-    mk_key("Sys.read_line", SBT_FUNC),
-    mk_fnval(file->insts.idx, 1));
-  // Push heap address to store the read string.
+    mk_key("Sys.print_str", SBT_FUNC),
+    mk_fnval(file->insts.idx, 0));
+
+  // Push `nchars` from the arguments onto stack.
   add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 }});
-  // Read a line and store the string at this heap address.
-  // `BUILTIN_READ_LINE` pushes the number of chars read on stack.
-  add_bii(&file->insts, (Inst) { .code=BUILTIN_READ_LINE });
-  // Return the number of read characters (pushed by `BUILTIN_READ_LINE`).
+  // Push `addr` from the arguments onto the stack.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=1 }});
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_PRINT_STR });
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=CONST, .offset=0 }});
   add_bii(&file->insts, (Inst) { .code=RET });
 }
 
 void builtin_read_char(File* file) {
   assert(file != NULL);
 
-  /* `Sys.read_char() -> char` reads a single
-   * character and returns it. */
+  /*
+   * `Sys.read_char() -> char`
+   * reads a single character and returns it.
+   */
 
   insert_st(&file->st,
     mk_key("Sys.read_char", SBT_FUNC),
-    mk_fnval(file->insts.idx, 1));
+    mk_fnval(file->insts.idx, 0));
+
   // Read a character.
   add_bii(&file->insts, (Inst) { .code=BUILTIN_READ_CHAR });
   // Return the character.
+  add_bii(&file->insts, (Inst) { .code=RET });
+}
+
+void builtin_read_num(File* file) {
+  assert(file != NULL);
+
+  /*
+   * `Sys.read_num() -> num`
+   * reads a single unsigned integer and returns it.
+   */
+
+  insert_st(&file->st,
+    mk_key("Sys.read_num", SBT_FUNC),
+    mk_fnval(file->insts.idx, 0));
+
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_READ_NUM });
+  add_bii(&file->insts, (Inst) { .code=RET });
+}
+
+void builtin_read_str(File* file) {
+  assert(file != NULL);
+
+  /*
+   * `Sys.read_str(addr) -> nchars`
+   * reads a line and stores it on heap starting at `addr`.
+   * The number of characters stored is returned.
+   * The stored string doesn't include the terminating
+   * newline character.
+   */
+
+  insert_st(&file->st,
+    mk_key("Sys.read_str", SBT_FUNC),
+    mk_fnval(file->insts.idx, 1));
+
+  // Push heap address to store the read string.
+  add_bii(&file->insts, (Inst) { .code=PUSH, .mem={ .seg=ARG, .offset=0 }});
+  // Read a line and store the string at this heap address.
+  // `BUILTIN_READ_STR` pushes the number of chars read on stack.
+  add_bii(&file->insts, (Inst) { .code=BUILTIN_READ_STR });
+  // Return the number of read characters (pushed by `BUILTIN_READ_STR`).
   add_bii(&file->insts, (Inst) { .code=RET });
 }
 
@@ -239,10 +274,12 @@ void init_system_file(File* file) {
 
   /* Store builtin functions in system file. */
   
-  builtin_print(file);
-  builtin_print_hstr(file);
+  builtin_print_char(file);
+  builtin_print_num(file);
+  builtin_print_str(file);
   builtin_read_char(file);
-  builtin_read_line(file);
+  builtin_read_num(file);
+  builtin_read_str(file);
 
   /* Add startup code (must be at the very end).
    * This first pushed the number of arguments `Sys.init`

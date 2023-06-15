@@ -1,0 +1,8 @@
+// Test result: io -> 5123:5123
+
+function Sys.init 0
+	// Read a number
+	call Sys.read_num 0
+	// Print that number
+	call Sys.print_num 1
+	return

@@ -40,9 +40,12 @@ typedef struct {
     // `TK_IDENT` is the last token (must be since it has the
     // lowest precedence). Therefore it's used from here on out
     // to ensure that there is no overlap.
-    BUILTIN_PRINT=(TK_IDENT + 1),
+    BUILTIN_PRINT_CHAR=(TK_IDENT + 1),
+    BUILTIN_PRINT_NUM,
+    BUILTIN_PRINT_STR,
     BUILTIN_READ_CHAR,
-    BUILTIN_READ_LINE,
+    BUILTIN_READ_NUM,
+    BUILTIN_READ_STR,
   } code;
 
   union {

@@ -48,10 +48,10 @@ static jmp_buf exec_env;
         "segment has %lu entries", inst_str_buf, (offset)); \
   longjmp(exec_env, EXEC_ERR);                              \
 }
-#define ADD_OVERFLOW_ERROR(x, y, sum, pos) {              \
-  perrf((pos), "addition overflow: %d + %d = %d > 65535", \
-    (x), (y), (sum));                                     \
-  longjmp(exec_env, EXEC_ERR);                            \
+#define ADD_OVERFLOW_ERROR(x, y, sum, pos) {           \
+  perrf((pos), "addition overflow: %d + %d = %d > %d", \
+    (x), (y), (sum), BIT16_LIMIT);                     \
+  longjmp(exec_env, EXEC_ERR);                         \
 }
 #define SUB_UNDERFLOW_ERROR(x, y, pos) {                  \
   int diff = (int) (x) - (int) (y);                       \
@@ -76,7 +76,7 @@ static jmp_buf exec_env;
   longjmp(exec_env, EXEC_ERR);                                  \
 }
 #define READ_IO_ERROR(pos) {               \
-  perr((pos), "system line read failed."); \
+  perr((pos), "system read failed."); \
   longjmp(exec_env, EXEC_ERR);             \
 }
 #define DEF_ERR(key, pos) {                        \
@@ -84,6 +84,16 @@ static jmp_buf exec_env;
     "defined multiple times",                      \
     key_type_name((key).type), (key).ident);       \
   longjmp(exec_env, EXEC_ERR);                     \
+}
+#define READ_NUM_CHAR_ERROR(pos) {             \
+  perr((pos), "invalid input, `Sys.read_num` " \
+    "only accepts digits.");                   \
+  longjmp(exec_env, EXEC_ERR);                 \
+}
+#define READ_NUM_OVERFLOW_ERROR(pos, num) {               \
+  perrf((pos), "number %d read by `Sys.read_num` "        \
+    "is too large. The limit is %d", (num), BIT16_LIMIT); \
+  longjmp(exec_env, EXEC_ERR);                            \
 }
 
 void exec_pop(Inst inst, Stack* stack, Heap* heap, Memory* mem) {
@@ -637,7 +647,7 @@ void exec_ret(Program* prog, Pos pos) {
   prog->files[prog->fi].ei = ret_ei;
 }
 
-static inline void exec_builtin_print(Stack* stack, Pos pos) {
+static inline void exec_builtin_print_char(Stack* stack, Pos pos) {
   assert(stack != NULL);
 
   Word val;
@@ -647,6 +657,32 @@ static inline void exec_builtin_print(Stack* stack, Pos pos) {
   hvme_fprintf(stdout, "%c", (char) val);
 }
 
+static inline void exec_builtin_print_num(Stack* stack, Pos pos) {
+  assert(stack != NULL);
+
+  Word val;
+  if (!spop(stack, &val))
+    STACK_UNDERFLOW_ERROR(pos);
+
+  hvme_fprintf(stdout, "%d", val);
+}
+
+static inline void exec_builtin_print_str(Program* prog, Pos pos) {
+  assert(prog != NULL);
+
+  Addr str_start;
+  if (!spop(&prog->stack, (Word*) &str_start))
+    STACK_UNDERFLOW_ERROR(pos);
+  Word nchars;
+  if (!spop(&prog->stack, &nchars))
+    STACK_UNDERFLOW_ERROR(pos);
+
+  for (Addr i = 0; i < nchars; i++) {
+    hvme_fprintf(stdout, "%c",
+      (char) heap_get(prog->heap, str_start + i));
+  }
+}
+
 static inline void exec_builtin_read_char(Stack* stack) {
   assert(stack != NULL);
 
@@ -654,7 +690,31 @@ static inline void exec_builtin_read_char(Stack* stack) {
   spush(stack, ch);
 }
 
-static inline void exec_builtin_read_line(Program* prog, Pos pos) {
+static inline void exec_builtin_read_num(Stack* stack, Pos pos) {
+  assert(stack != NULL);
+
+  unsigned int num_buf;
+  int res = scanf("%u", &num_buf);
+  if (res == EOF) {
+    READ_IO_ERROR(pos);
+  } else if (res == 0) {
+    // Input was invalid and nothing was read.
+    // This consumes the rest of the line.
+    char c = fgetc(stdin);
+    while (c != '\n') {
+      c = fgetc(stdin);
+    }
+    READ_NUM_CHAR_ERROR(pos);
+  }
+
+  if (num_buf > BIT16_LIMIT) {
+    READ_NUM_OVERFLOW_ERROR(pos, num_buf);
+  } else {
+    spush(stack, (Word) num_buf);
+  }
+}
+
+static inline void exec_builtin_read_str(Program* prog, Pos pos) {
   assert(prog != NULL);
 
   Word heap_addr;
@@ -664,15 +724,18 @@ static inline void exec_builtin_read_line(Program* prog, Pos pos) {
   char* buf = NULL;
   size_t len = 0;
   ssize_t nread_buf = 0;
+
   if ((nread_buf = getline(&buf, &len, stdin)) == -1) {
     free(buf);
     READ_IO_ERROR(pos);
   }
+
   // Cast is OK because `-1` was checked.
   // `getline` always includes the delimiter ('\n')
   // which we want to remove. This means that while
   // the minimum number of characters will be one, we
   // have to decrease it by one.
+
   assert(nread_buf >= 1);
   size_t nread = nread_buf - 1;
 
@@ -761,14 +824,23 @@ int exec_prog(Program* prog) {
       case RET:
         exec_ret(prog, active_inst(prog).pos);
         break;
-      case BUILTIN_PRINT:
-        exec_builtin_print(&prog->stack, active_inst(prog).pos);
+      case BUILTIN_PRINT_CHAR:
+        exec_builtin_print_char(&prog->stack, active_inst(prog).pos);
+        break;
+      case BUILTIN_PRINT_NUM:
+        exec_builtin_print_num(&prog->stack, active_inst(prog).pos);
+        break;
+      case BUILTIN_PRINT_STR:
+        exec_builtin_print_str(prog, active_inst(prog).pos);
         break;
       case BUILTIN_READ_CHAR:
         exec_builtin_read_char(&prog->stack);
         break;
-      case BUILTIN_READ_LINE:
-        exec_builtin_read_line(prog, active_inst(prog).pos);
+      case BUILTIN_READ_NUM:
+        exec_builtin_read_num(&prog->stack, active_inst(prog).pos);
+        break;
+      case BUILTIN_READ_STR:
+        exec_builtin_read_str(prog, active_inst(prog).pos);
         break;
       default: {
         INST_STR(str, &active_inst(prog));

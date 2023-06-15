@@ -1,12 +1,12 @@
-// Test result: skip
+// Test result: io -> blah:blah
 
 function Sys.init 0
 	// Read a line starting at heap[16].
 	push constant 16
-	call Sys.read_line 1
+	call Sys.read_str 1
 
 	// Print this string.
 	push constant 16
-	call Sys.print_hstr 2
+	call Sys.print_str 2
 
 	return

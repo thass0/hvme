@@ -1,8 +1,8 @@
 // Test result: 2
 
 function Sys.init 1
-	push constant 50  // ASCII 2
-	call Sys.print 1
+	push constant 2
+	call Sys.print_num 1
 	return
 
 // Will print `2` to stdout.
