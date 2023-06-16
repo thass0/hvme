@@ -1,0 +1,25 @@
+name: Makefile test CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup python version
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+    
+    - name: Run tests
+      run: make test
+
+    - name: Run examples (integration tests)
+      run: make examples
