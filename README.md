@@ -8,7 +8,7 @@ which runs directly on your machine instead of compiling to
 ## Try it out
 
 ```sh
-git clone https://github.com/d4ckard/hvme.git
+git clone https://github.com/thass0/hvme.git
 cd hvme
 make run args=examples/fibonacci.vm
 ```
